@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -78,7 +78,11 @@ def home():
     return {"status": "ok", "source": "railway"}
 
 @app.post("/api/register")
-def register(device_id: str = Header(..., alias="device-id"), db: Session = Depends(get_db)):
+def register(request: Request, db: Session = Depends(get_db)):
+    device_id = request.headers.get("device-id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="缺少 device_id 请求头")
+
     if db.query(User).filter(User.device_id == device_id).first():
         raise HTTPException(400, "设备已注册")
     
