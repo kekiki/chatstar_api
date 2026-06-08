@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -70,10 +70,6 @@ def current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     except JWTError:
         raise HTTPException(401, "令牌失效")
 
-# ===================== 请求模型 =====================
-class DeviceRegister(BaseModel):
-    device_id: str
-
 # ===================== 应用 =====================
 app = FastAPI(title="Railway FastAPI")
 
@@ -82,15 +78,15 @@ def home():
     return {"status": "ok", "source": "railway"}
 
 @app.post("/api/register")
-def register(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    if db.query(User).filter(User.device_id == form.device_id).first():
+def register(device_id: str = Header(..., alias="device_id"), db: Session = Depends(get_db)):
+    if db.query(User).filter(User.device_id == device_id).first():
         raise HTTPException(400, "设备已注册")
     
     user_id = str(uuid.uuid4())
     password = str(uuid.uuid4())[:8]
     hashed = get_hash(password)
 
-    user = User(user_id=user_id, hashed_password=hashed, device_id=form.device_id)
+    user = User(user_id=user_id, hashed_password=hashed, device_id=device_id)
     db.add(user)
     db.commit()
 
