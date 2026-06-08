@@ -18,10 +18,10 @@ def register(request: Request, db: Session = Depends(get_db)):
     """Register a new user with device_id from request header."""
     device_id = request.headers.get("device-id") or request.headers.get("device_id")
     if not device_id:
-        raise HTTPException(status_code=400, detail="缺少 device_id 请求头")
+        raise HTTPException(status_code=400, detail="Missing device_id header")
 
     if db.query(User).filter(User.device_id == device_id).first():
-        raise HTTPException(400, "设备已注册")
+        raise HTTPException(400, "Device already registered")
     
     password = str(uuid.uuid4())[:8]
     hashed = get_hash(password)
@@ -44,11 +44,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     try:
         uid = int(form_data.username)
     except Exception:
-        raise HTTPException(status_code=401, detail="账号或密码错误")
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
     user = db.query(User).filter(User.id == uid).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(401, "账号或密码错误")
+        raise HTTPException(401, "Invalid username or password")
     
     token = create_token({"sub": user.id})
     return {

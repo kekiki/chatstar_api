@@ -30,7 +30,7 @@ def get_hash(password: str) -> str:
 
 def create_token(data: dict) -> str:
     """Create JWT token."""
-    expire = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(datetime.UTC) + timedelta(days=TOKEN_EXPIRE_DAYS)
     data.update({"exp": expire})
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -44,15 +44,15 @@ def current_user(
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(401, "无效授权")
+            raise HTTPException(401, "Invalid authorization")
         try:
             uid = int(user_id)
         except Exception:
-            raise HTTPException(401, "无效授权")
+            raise HTTPException(401, "Invalid authorization")
 
-        user = db.query(User).filter(User.user_id == uid).first()
+        user = db.query(User).filter(User.id == uid).first()
         if not user:
-            raise HTTPException(401, "用户不存在")
+            raise HTTPException(401, "User not found")
         return user
     except JWTError:
-        raise HTTPException(401, "令牌失效")
+        raise HTTPException(401, "Invalid token")
