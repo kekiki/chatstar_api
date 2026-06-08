@@ -78,7 +78,7 @@ def home():
     return {"status": "ok", "source": "railway"}
 
 @app.post("/api/register")
-def register(device_id: str = Header(..., alias="device_id"), db: Session = Depends(get_db)):
+def register(device_id: str = Header(..., alias="device-id"), db: Session = Depends(get_db)):
     if db.query(User).filter(User.device_id == device_id).first():
         raise HTTPException(400, "设备已注册")
     
