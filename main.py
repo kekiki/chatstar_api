@@ -79,7 +79,7 @@ app = FastAPI(title="Railway FastAPI")
 
 @app.get("/")
 def home():
-    return {"status": "running", "source": "railway"}
+    return {"status": "ok", "source": "railway"}
 
 @app.post("/api/register")
 def register(data: DeviceRegister, db: Session = Depends(get_db)):
