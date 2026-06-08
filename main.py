@@ -82,15 +82,15 @@ def home():
     return {"status": "ok", "source": "railway"}
 
 @app.post("/api/register")
-def register(data: DeviceRegister, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.device_id == data.device_id).first():
+def register(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    if db.query(User).filter(User.device_id == form.device_id).first():
         raise HTTPException(400, "设备已注册")
     
     user_id = str(uuid.uuid4())
     password = str(uuid.uuid4())[:8]
     hashed = get_hash(password)
 
-    user = User(user_id=user_id, hashed_password=hashed, device_id=data.device_id)
+    user = User(user_id=user_id, hashed_password=hashed, device_id=form.device_id)
     db.add(user)
     db.commit()
 
