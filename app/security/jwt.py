@@ -13,7 +13,8 @@ from app.database import get_db
 from app.models import User
 
 # ===================== JWT 认证 =====================
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 to avoid bcrypt backend compatibility issues on some Python environments.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
 
@@ -49,7 +50,7 @@ def current_user(
         except Exception:
             raise HTTPException(401, "无效授权")
 
-        user = db.query(User).filter(User.id == uid).first()
+        user = db.query(User).filter(User.user_id == uid).first()
         if not user:
             raise HTTPException(401, "用户不存在")
         return user
