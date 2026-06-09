@@ -16,21 +16,21 @@ router = APIRouter(prefix="/api", tags=["auth"])
 @router.post("/loginGuest")
 def login_guest(request: Request, db: Session = Depends(get_db)):
     """Login as a guest user with device_id from request header."""
-    device_id = request.headers.get("device-id") or request.headers.get("device_id")
-    if not device_id:
+    deviceId = request.headers.get("device-id") or request.headers.get("device_id")
+    if not deviceId:
         raise HTTPException(status_code=400, detail="Missing device_id header")
 
-    user = db.query(User).filter(User.device_id == device_id).first()
+    user = db.query(User).filter(User.deviceId == deviceId).first()
     if user:
         token = create_token({"sub": user.id})
         return {
             "code": 200,
-            "data": {"access_token": token, "user_id": user.id}
+            "data": {"accessToken": token, "userId": user.id}
         }
     
     timeinterval = time.time()
     # Create user, let DB assign primary key `id`
-    user = User(device_id=device_id, created_at=int(timeinterval))
+    user = User(deviceId=deviceId, createdAt=int(timeinterval))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -38,7 +38,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     token = create_token({"sub": user.id})
     return {
         "code": 200,
-        "data": {"access_token": token, "user_id": user.id}
+        "data": {"accessToken": token, "userId": user.id}
     }
 
 
@@ -57,5 +57,5 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     token = create_token({"sub": user.id})
     return {
         "code": 200,
-        "data": {"access_token": token, "user_id": user.id}
+        "data": {"accessToken": token, "userId": user.id}
     }

@@ -10,27 +10,27 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String, unique=True, index=True)
-    created_at = Column(Integer, unique=True)
+    deviceId = Column(String, unique=True, index=True)
+    createdAt = Column(Integer, unique=True)
     country = Column(String, default="US")
     nickname = Column(String)
     avatar = Column(String)
     balance = Column(Integer, default=0)
-    is_vip = Column(Boolean, default=False)
+    isVip = Column(Boolean, default=False)
     vipEndTime = Column(Integer, default=0)
     language = Column(String, default="en")
     isDisturb = Column(Boolean, default=False)
 
     def toJson(self):
         return {
-            "user_id": self.id,
-            "device_id": self.device_id,
-            "created_at": self.created_at,
+            "userId": self.id,
+            "deviceId": self.deviceId,
+            "createdAt": self.createdAt,
             "country": self.country,
             "nickname": self.nickname,
             "avatar": self.avatar,
             "balance": self.balance,
-            "is_vip": self.is_vip,
+            "isVip": self.isVip,
             "vipEndTime": self.vipEndTime,
             "language": self.language,
             "isDisturb": self.isDisturb
