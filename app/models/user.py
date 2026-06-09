@@ -1,7 +1,7 @@
 """
 User database model.
 """
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Boolean
 from app.database import Base
 
 
@@ -17,10 +17,10 @@ class User(Base):
     nickname = Column(String)
     avatar = Column(String)
     balance = Column(Integer, default=0)
-    is_vip = Column(bool, default=False)
+    is_vip = Column(Boolean, default=False)
     vipEndTime = Column(Integer, default=0)
     language = Column(String, default="en")
-    isDisturb = Column(bool, default=False)
+    isDisturb = Column(Boolean, default=False)
 
     def toJson(self):
         return {
