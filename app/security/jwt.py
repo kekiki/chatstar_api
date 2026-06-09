@@ -30,7 +30,7 @@ def get_hash(password: str) -> str:
 
 def create_token(data: dict) -> str:
     """Create JWT token."""
-    expire = datetime.now(datetime.UTC) + timedelta(days=TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(datetime.timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
     data.update({"exp": expire})
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
