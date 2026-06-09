@@ -10,7 +10,6 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    hashed_password = Column(String)
     device_id = Column(String, unique=True, index=True)
     created_at = Column(Integer, unique=True)
     country = Column(String, default="US")

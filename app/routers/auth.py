@@ -1,7 +1,7 @@
 """
 Authentication routes: register and login.
 """
-import uuid
+import time
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -13,28 +13,32 @@ from app.security import create_token, get_hash, verify_password
 router = APIRouter(prefix="/api", tags=["auth"])
 
 
-@router.post("/register")
-def register(request: Request, db: Session = Depends(get_db)):
-    """Register a new user with device_id from request header."""
+@router.post("/loginGuest")
+def login_guest(request: Request, db: Session = Depends(get_db)):
+    """Login as a guest user with device_id from request header."""
     device_id = request.headers.get("device-id") or request.headers.get("device_id")
     if not device_id:
         raise HTTPException(status_code=400, detail="Missing device_id header")
 
-    if db.query(User).filter(User.device_id == device_id).first():
-        raise HTTPException(400, "Device already registered")
+    user = db.query(User).filter(User.device_id == device_id).first()
+    if user:
+        token = create_token({"sub": user.id})
+        return {
+            "code": 200,
+            "data": {"access_token": token, "user_id": user.id}
+        }
     
-    password = str(uuid.uuid4())[:8]
-    hashed = get_hash(password)
-
+    timeinterval = time.time()
     # Create user, let DB assign primary key `id`
-    user = User(hashed_password=hashed, device_id=device_id)
+    user = User(device_id=device_id, created_at=int(timeinterval))
     db.add(user)
     db.commit()
     db.refresh(user)
 
+    token = create_token({"sub": user.id})
     return {
         "code": 200,
-        "data": {"user_id": user.id, "password": password}
+        "data": {"access_token": token, "user_id": user.id}
     }
 
 
@@ -53,5 +57,5 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     token = create_token({"sub": user.id})
     return {
         "code": 200,
-        "data": {"access_token": token, "token_type": "bearer"}
+        "data": {"access_token": token, "user_id": user.id}
     }
