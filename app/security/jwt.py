@@ -1,7 +1,7 @@
 """
 JWT and password authentication utilities.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -30,7 +30,7 @@ def get_hash(password: str) -> str:
 
 def create_token(data: dict) -> str:
     """Create JWT token."""
-    expire = datetime.now(datetime.timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
     data.update({"exp": expire})
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
