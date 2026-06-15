@@ -53,6 +53,8 @@ def current_user(
         user = db.query(User).filter(User.id == uid).first()
         if not user:
             raise HTTPException(401, "User not found")
+        
+        user.id = int(user.id) + 100000000  # Offset user ID by 100 million for external use
         return user
     except JWTError:
         raise HTTPException(401, "Invalid token")

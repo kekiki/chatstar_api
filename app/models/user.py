@@ -12,6 +12,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     deviceId = Column(String, unique=True, index=True)
     createdAt = Column(Integer, unique=True)
+    googleId = Column(String, unique=True, index=True, nullable=True)
+    email = Column(String, unique=True, index=True, nullable=True)
     country = Column(String, default="US")
     nickname = Column(String)
     avatar = Column(String)

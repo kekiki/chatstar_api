@@ -1,16 +1,96 @@
 """
 Authentication routes: register and login.
 """
+import json
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.config import GOOGLE_CLIENT_ID
 from app.database import get_db
 from app.models import User
 from app.security import create_token, get_hash, verify_password
+from app.schemas import GoogleLoginRequest
 
 router = APIRouter(prefix="/api", tags=["auth"])
+
+
+
+def verify_google_id_token(id_token: str) -> dict:
+    """Verify a Google ID token using Google's tokeninfo endpoint."""
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID is not configured")
+
+    token_info_url = (
+        "https://oauth2.googleapis.com/tokeninfo?id_token="
+        + urllib.parse.quote(id_token)
+    )
+
+    try:
+        with urllib.request.urlopen(token_info_url, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError:
+        raise HTTPException(status_code=401, detail="Invalid Google ID token")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unable to verify Google token")
+
+    if payload.get("aud") != GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=401, detail="Google token audience mismatch")
+
+    verified = str(payload.get("email_verified", "false")).lower() == "true"
+    if not verified:
+        raise HTTPException(status_code=401, detail="Google email is not verified")
+
+    return payload
+
+
+@router.post("/loginGoogle")
+def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
+    """Login or register a user using a Google ID token."""
+    payload = verify_google_id_token(data.id_token)
+    google_id = payload.get("sub")
+    if not google_id:
+        raise HTTPException(status_code=401, detail="Invalid Google token payload")
+
+    email = payload.get("email")
+    nickname = payload.get("name")
+    avatar = payload.get("picture")
+
+    user = db.query(User).filter(User.googleId == google_id).first()
+    if not user and email:
+        user = db.query(User).filter(User.email == email).first()
+
+    if user:
+        if not user.googleId:
+            user.googleId = google_id
+        if email and not user.email:
+            user.email = email
+        if nickname:
+            user.nickname = nickname
+        if avatar:
+            user.avatar = avatar
+    else:
+        user = User(
+            googleId=google_id,
+            email=email,
+            nickname=nickname,
+            avatar=avatar,
+            createdAt=int(time.time())
+        )
+        db.add(user)
+
+    db.commit()
+    db.refresh(user)
+
+    token = create_token({"sub": user.id})
+    return {
+        "code": 200,
+        "data": {"accessToken": token}
+    }
 
 
 @router.post("/loginGuest")
@@ -25,7 +105,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
         token = create_token({"sub": user.id})
         return {
             "code": 200,
-            "data": {"accessToken": token, "userId": user.id}
+            "data": {"accessToken": token}
         }
     
     timeinterval = time.time()
@@ -38,11 +118,11 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     token = create_token({"sub": user.id})
     return {
         "code": 200,
-        "data": {"accessToken": token, "userId": user.id}
+        "data": {"accessToken": token}
     }
 
 
-@router.post("/login")
+@router.post("/loginPassword")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login with user_id and password."""
     try:
@@ -57,5 +137,5 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     token = create_token({"sub": user.id})
     return {
         "code": 200,
-        "data": {"accessToken": token, "userId": user.id}
+        "data": {"accessToken": token}
     }

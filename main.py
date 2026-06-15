@@ -5,10 +5,12 @@ Main application factory and configuration.
 import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import PORT
 from app.database import Base, engine
 from app.routers import auth, users, web
+
 
 # ===================== Create database tables =====================
 Base.metadata.create_all(bind=engine)
@@ -18,6 +20,13 @@ app = FastAPI(
     title="ChatStar API",
     description="Chat and user management service",
     version="1.0.0"
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # 生产替换为你的前端域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ===================== Mount static files =====================
