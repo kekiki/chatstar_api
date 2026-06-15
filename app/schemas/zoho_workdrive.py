@@ -2,6 +2,8 @@ import requests
 from fastapi import HTTPException
 from pydantic_settings import BaseSettings
 
+from app.config import ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, ZOHO_ACCOUNT_URL, ZOHO_ORG_ID, ZOHO_ROOT_FOLDER_ID
+
 # 加载配置
 class ZohoSettings(BaseSettings):
     ZOHO_CLIENT_ID: str
@@ -11,8 +13,13 @@ class ZohoSettings(BaseSettings):
     ZOHO_ORG_ID: str
     ZOHO_ROOT_FOLDER_ID: str
 
-    class Config:
-        env_file = ".env"
+    def __init__(self):
+        self.ZOHO_CLIENT_ID = ZOHO_CLIENT_ID
+        self.ZOHO_CLIENT_SECRET = ZOHO_CLIENT_SECRET
+        self.ZOHO_REFRESH_TOKEN = ZOHO_REFRESH_TOKEN
+        self.ZOHO_ACCOUNT_URL = ZOHO_ACCOUNT_URL
+        self.ZOHO_ORG_ID = ZOHO_ORG_ID
+        self.ZOHO_ROOT_FOLDER_ID = ZOHO_ROOT_FOLDER_ID
 
 zoho_cfg = ZohoSettings()
 
