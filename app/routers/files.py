@@ -3,7 +3,7 @@ files upload/download routes.
 """
 from fastapi import APIRouter, UploadFile, File
 
-from  app.schemas.zoho_workdrive import ZohoWorkDrive
+from  app.schemas import ZohoWorkDrive
 
 router = APIRouter(prefix="/api", tags=["files"])
 
