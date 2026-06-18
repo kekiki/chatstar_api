@@ -22,6 +22,9 @@ class User(Base):
     vipEndTime = Column(Integer, default=0)
     language = Column(String, default="en")
     isDisturb = Column(Boolean, default=False)
+    followcount = Column(Integer, default=0)
+    fanscount = Column(Integer, default=0)
+    likecount = Column(Integer, default=0)
 
     def toJson(self):
         return {
@@ -35,5 +38,8 @@ class User(Base):
             "isVip": self.isVip,
             "vipEndTime": self.vipEndTime,
             "language": self.language,
-            "isDisturb": self.isDisturb
+            "isDisturb": self.isDisturb,
+            "followCount": self.followcount,
+            "fansCount": self.fanscount,
+            "likeCount": self.likecount
         }
