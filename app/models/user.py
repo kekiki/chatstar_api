@@ -24,7 +24,7 @@ class User(Base):
     followcount = Column(Integer, default=0)
     fanscount = Column(Integer, default=0)
     likecount = Column(Integer, default=0)
-    googleid = Column(String, unique=True, index=True, nullable=True)
+    # googleid = Column(String, unique=True, index=True, nullable=True)
 
     def toJson(self):
         return {
@@ -42,5 +42,5 @@ class User(Base):
             "followCount": self.followcount,
             "fansCount": self.fanscount,
             "likeCount": self.likecount,
-            "googleId": self.googleid,
+            # "googleId": self.googleid,
         }
