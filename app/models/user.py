@@ -12,7 +12,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     deviceId = Column(String, unique=True, index=True)
     createdAt = Column(Integer, unique=True)
-    googleId = Column(String, unique=True, index=True, nullable=True)
+    googleid = Column(String, unique=True, index=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=True)
     country = Column(String, default="US")
     nickname = Column(String)
@@ -30,6 +30,7 @@ class User(Base):
         return {
             "userId": self.id,
             "deviceId": self.deviceId,
+            "googleId": self.googleid,
             "createdAt": self.createdAt,
             "country": self.country,
             "nickname": self.nickname,
