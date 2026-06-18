@@ -12,7 +12,6 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     deviceId = Column(String, unique=True, index=True)
     createdAt = Column(Integer, unique=True)
-    googleid = Column(String, unique=True, index=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=True)
     country = Column(String, default="US")
     nickname = Column(String)
@@ -25,12 +24,12 @@ class User(Base):
     followcount = Column(Integer, default=0)
     fanscount = Column(Integer, default=0)
     likecount = Column(Integer, default=0)
+    googleid = Column(String, unique=True, index=True, nullable=True)
 
     def toJson(self):
         return {
             "userId": self.id,
             "deviceId": self.deviceId,
-            "googleId": self.googleid,
             "createdAt": self.createdAt,
             "country": self.country,
             "nickname": self.nickname,
@@ -42,5 +41,6 @@ class User(Base):
             "isDisturb": self.isDisturb,
             "followCount": self.followcount,
             "fansCount": self.fanscount,
-            "likeCount": self.likecount
+            "likeCount": self.likecount,
+            "googleId": self.googleid,
         }
