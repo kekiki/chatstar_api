@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import PORT
 from app.database import Base, engine
+from app import models
 from app.routers import auth, users, web, files
 
 
