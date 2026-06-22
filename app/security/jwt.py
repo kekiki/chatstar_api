@@ -3,7 +3,7 @@ JWT and password authentication utilities.
 """
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from app.models import User
 # ===================== JWT 认证 =====================
 # Use pbkdf2_sha256 to avoid bcrypt backend compatibility issues on some Python environments.
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+bearer_scheme = HTTPBearer()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -36,12 +36,12 @@ def create_token(data: dict) -> str:
 
 
 def current_user(
-    token: str = Depends(oauth2_scheme),
+    token: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user from token."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(401, "Invalid authorization")

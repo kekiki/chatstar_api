@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import GOOGLE_CLIENT_ID
 from app.database import get_db
 from app.models import User
-from app.security import create_token, get_hash, verify_password
+from app.security import create_token
 from app.schemas import GoogleLoginRequest
 
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -122,20 +122,20 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/loginPassword")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Login with user_id and password."""
-    try:
-        uid = int(form_data.username)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+# @router.post("/loginPassword")
+# def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+#     """Login with user_id and password."""
+#     try:
+#         uid = int(form_data.username)
+#     except Exception:
+#         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    user = db.query(User).filter(User.id == uid).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(401, "Invalid username or password")
+#     user = db.query(User).filter(User.id == uid).first()
+#     if not user or not verify_password(form_data.password, user.hashed_password):
+#         raise HTTPException(401, "Invalid username or password")
     
-    token = create_token({"sub": user.id})
-    return {
-        "code": 200,
-        "data": {"accessToken": token}
-    }
+#     token = create_token({"sub": user.id})
+#     return {
+#         "code": 200,
+#         "data": {"accessToken": token}
+#     }

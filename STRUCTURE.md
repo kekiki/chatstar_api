@@ -56,7 +56,8 @@ chatstar_api/
 
 ### `routers/auth.py`
 - `/api/register` - 用户注册（device_id 从请求头读取）
-- `/api/login` - 用户登录（返回 JWT token）
+- `/api/loginGuest` - 游客登录（device_id 从请求头读取，返回 JWT token）
+- `/api/loginGoogle` - Google 登录（返回 JWT token）
 
 ### `routers/users.py`
 - `/api/user/info` - 获取当前用户信息（需要 Bearer token）
@@ -81,9 +82,15 @@ curl -X POST http://localhost:8080/api/register \
 
 ### 登录
 ```bash
-curl -X POST http://localhost:8080/api/login \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=1&password=<password>"
+curl -X POST http://localhost:8080/api/loginGuest \
+  -H "device-id: your-device-id"
+```
+
+Google 登录示例：
+```bash
+curl -X POST http://localhost:8080/api/loginGoogle \
+  -H "Content-Type: application/json" \
+  -d '{"id_token":"<google-id-token>"}'
 ```
 
 ### 获取用户信息
