@@ -10,9 +10,10 @@ class Order(Base):
     __tablename__ = "orders"
     
     id = Column(Integer, primary_key=True, index=True)
+    userId = Column(Integer,  index=True)
     orderNo = Column(String, unique=True, index=True)
     createdAt = Column(Integer, unique=True)
-    productId = Column(String, unique=True, index=True)
+    productId = Column(String, index=True)
     productType = Column(Integer, default=0)
     orderStatus = Column(Integer, default=0)
     currencyCode = Column(String, default="USD")
@@ -25,6 +26,7 @@ class Order(Base):
     def toJson(self):
         return {
             "orderId": self.id,
+            "userId": self.userId,
             "orderNo": self.orderNo,
             "createdAt": self.createdAt,
             "productId": self.productId,

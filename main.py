@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import PORT
 from app.database import Base, engine
 from app import models
-from app.routers import auth, users, web, files
+from app.routers import auth, users, web, files, orders
 
 
 # ===================== Create database tables =====================
@@ -39,6 +39,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(web.router)
 app.include_router(files.router)
+app.include_router(orders.router)
 
 # ===================== Health check endpoint =====================
 @app.get("/")
