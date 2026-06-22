@@ -13,7 +13,7 @@ class Product(Base):
     sku = Column(String, unique=True, index=True)
     productType = Column(Integer, default=0)
     currencyCode = Column(String, default="USD")
-    currencyPrice = Column(int, default=0)
+    currencyPrice = Column(Integer, default=0)
     vipDays = Column(Integer, default=0)
     callCardNum = Column(Integer, default=0)
     matchCardNum = Column(Integer, default=0)
@@ -24,7 +24,6 @@ class Product(Base):
         return {
             "sku": self.sku,
             "productType": self.productType,
-            "orderStatus": self.orderStatus,
             "currencyCode": self.currencyCode,
             "currencyPrice": self.currencyPrice,
             "vipDays": self.vipDays,

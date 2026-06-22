@@ -16,7 +16,7 @@ class Order(Base):
     productType = Column(Integer, default=0)
     orderStatus = Column(Integer, default=0)
     currencyCode = Column(String, default="USD")
-    currencyPrice = Column(int, default=0)
+    currencyPrice = Column(Integer, default=0)
     vipDays = Column(Integer, default=0)
     callCardNum = Column(Integer, default=0)
     matchCardNum = Column(Integer, default=0)
