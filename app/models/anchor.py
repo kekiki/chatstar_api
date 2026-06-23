@@ -1,7 +1,7 @@
 """
 Anchor database model.
 """
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ARRAY
 from app.database import Base
 
 
@@ -15,9 +15,9 @@ class Anchor(Base):
     nickname = Column(String)
     avatar = Column(String)
     language = Column(String, default="en")
-    followcount = Column(Integer, default=0)
-    fanscount = Column(Integer, default=0)
-    likecount = Column(Integer, default=0)
+    followCount = Column(Integer, default=0)
+    fansCount = Column(Integer, default=0)
+    likeCount = Column(Integer, default=0)
 
     def toJson(self):
         return {
@@ -27,7 +27,7 @@ class Anchor(Base):
             "nickname": self.nickname,
             "avatar": self.avatar,
             "language": self.language,
-            "followCount": self.followcount,
-            "fansCount": self.fanscount,
-            "likeCount": self.likecount,
+            "followCount": self.followCount,
+            "fansCount": self.fansCount,
+            "likeCount": self.likeCount,
         }
