@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import GOOGLE_CLIENT_ID
 from app.database import get_db
-from app.models import User
+from app.models import User, AppList
 from app.security import create_token
 from app.schemas import GoogleLoginRequest
 
@@ -96,9 +96,17 @@ def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
 @router.post("/loginGuest")
 def login_guest(request: Request, db: Session = Depends(get_db)):
     """Login as a guest user with device_id from request header."""
-    deviceId = request.headers.get("device-id") or request.headers.get("device_id")
-    if not deviceId:
+    device_id = request.headers.get("device-id")
+    if not device_id:
         raise HTTPException(status_code=400, detail="Missing device_id header")
+
+    package_name = request.headers.get("package-name")
+    if not package_name:
+        raise HTTPException(status_code=400, detail="Missing package_name header")
+
+    package = db.query(AppList).filter(AppList.package_name == package_name).first()
+    if not package:
+        raise HTTPException(status_code=400, detail="Invalid package_name")
 
     user = db.query(User).filter(User.device_id == device_id).first()
     if user:
@@ -108,9 +116,8 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
             "data": {"accessToken": token}
         }
     
-    timeinterval = time.time()
     # Create user, let DB assign primary key `id`
-    user = User(device_id=device_id, created_time=int(timeinterval))
+    user = User(device_id=device_id, app_id=package.id)
     db.add(user)
     db.commit()
     db.refresh(user)
