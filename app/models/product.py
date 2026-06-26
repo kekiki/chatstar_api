@@ -1,7 +1,7 @@
 """
 Product database model.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String
 from app.database import Base
 
 
@@ -10,8 +10,8 @@ class Product(Base):
     __tablename__ = "app_products"
     
     id = Column(Integer, primary_key=True, index=True)
-    app_id = Column(Integer, ForeignKey("app_list.id"))
-    sku = Column(String, unique=True, index=True)
+    app_id = Column(Integer, index=True)
+    sku = Column(String, unique=True)
     diamonds = Column(Integer, default=0)
     reward_diamonds = Column(Integer, default=0)
     discount_type = Column(Integer, default=0)

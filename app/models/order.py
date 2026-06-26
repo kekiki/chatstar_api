@@ -1,7 +1,7 @@
 """
 Order database model.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String
 from app.database import Base
 
 
@@ -10,7 +10,7 @@ class Order(Base):
     __tablename__ = "pay_orders"
     
     id = Column(Integer, primary_key=True, index=True)
-    app_id = Column(Integer, ForeignKey("app_list.id"), index=True)
+    app_id = Column(Integer, index=True)
     user_id = Column(Integer, index=True)
     order_no = Column(String, index=True)
     created_time = Column(Integer)
