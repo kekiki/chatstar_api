@@ -1,13 +1,13 @@
 """
 User database model.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean
 from app.database import Base
 import datetime
 
 class User(Base):
     """User model for SQLAlchemy ORM."""
-    __tablename__ = "app_user"
+    __tablename__ = "app_users"
     
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(String(64), index=True)
