@@ -45,7 +45,7 @@ def create_order(data: CreateOrderRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(order)
 
-    return {"code": 200, "data": order.toJson()}
+    return {"code": 200, "data": order.to_dict()}
 
 
 @router.get("/order/{orderNo}")
@@ -54,14 +54,14 @@ def get_order(orderNo: str, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.orderNo == orderNo).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return {"code": 200, "data": order.toJson()}
+    return {"code": 200, "data": order.to_dict()}
 
 
 @router.get("/orders/user/{userId}")
 def get_orders_by_user(userId: int, db: Session = Depends(get_db)):
     """Get all orders for a given userId."""
     rows: List[Order] = db.query(Order).filter(Order.userId == userId).order_by(Order.id.desc()).all()
-    items = [r.toJson() for r in rows]
+    items = [r.to_dict() for r in rows]
     return {"code": 200, "data": items}
 
 

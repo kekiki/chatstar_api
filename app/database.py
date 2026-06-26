@@ -4,7 +4,7 @@ Database configuration and session management.
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from .config import DATABASE_URL, DB_CHECK_SAME_THREAD
+from .config import DATABASE_URL
 
 # ===================== 智能数据库 =====================
 if DATABASE_URL.startswith("sqlite"):

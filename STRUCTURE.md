@@ -10,23 +10,36 @@ chatstar_api/
 ├── Procfile                   # Railway 部署配置
 ├── requirements.txt           # Python 依赖
 ├── README.md                  # 项目文档
+├── STRUCTURE.md               # 项目结构文档
+├── .env                       # 环境变量（不提交）
+├── .gitignore                 # Git 忽略配置
 ├── app/                       # 应用核心模块
 │   ├── __init__.py
 │   ├── config.py              # 配置模块（环境变量、常量）
 │   ├── database.py            # 数据库配置和会话管理
 │   ├── models/                # 数据模型
 │   │   ├── __init__.py
-│   │   └── user.py            # User SQLAlchemy 模型
+│   │   ├── user.py            # User SQLAlchemy 模型
+│   │   ├── order.py           # Order SQLAlchemy 模型
+│   │   ├── product.py         # Product SQLAlchemy 模型
+│   │   └── media.py           # Media SQLAlchemy 模型
 │   ├── security/              # 认证和安全模块
 │   │   ├── __init__.py
 │   │   └── jwt.py             # JWT 和密码相关函数
-│   ├── schemas/               # Pydantic 模型（预留扩展）
-│   │   └── __init__.py
+│   ├── schemas/               # Pydantic 模型
+│   │   ├── __init__.py
+│   │   ├── google_request.py  # Google 登录请求模型
+│   │   ├── order_request.py   # 订单请求模型
+│   │   └── zoho_workdrive.py  # Zoho WorkDrive 集成模型
 │   └── routers/               # API 路由
 │       ├── __init__.py
 │       ├── auth.py            # 认证路由（注册、登录）
 │       ├── users.py           # 用户路由（用户信息）
+│       ├── orders.py          # 订单路由（创建、查询、验证）
+│       ├── files.py           # 文件上传路由（Zoho 集成）
 │       └── web.py             # 网页路由（法律页面）
+├── scripts/                   # 工具脚本
+│   └── test_orders.py         # 订单测试脚本
 └── web/                       # 静态 HTML 页面
     ├── terms.html             # 服务条款
     ├── privacy.html           # 隐私政策
@@ -47,7 +60,23 @@ chatstar_api/
 
 ### `models/user.py`
 - User SQLAlchemy ORM 模型
-- 字段：id, hashed_password, device_id
+- 字段：id, deviceId, email, googleId, nickname, avatar, balance, isVip, vipExpireTime, languageName, languageCode, followCount, fansCount, likeCount
+- 方法：to_dict() - 转换为字典格式
+
+### `models/order.py`
+- Order SQLAlchemy ORM 模型
+- 字段：id, userId, orderNo, productId, productType, orderStatus, currencyCode, currencyPrice, vipDays, callCardNum, matchCardNum, chatCardNum
+- 方法：to_dict() - 转换为字典格式
+
+### `models/product.py`
+- Product SQLAlchemy ORM 模型
+- 字段：id, sku, productType, currencyCode, currencyPrice, vipDays, callCardNum, matchCardNum, chatCardNum, discountType
+- 方法：to_dict() - 转换为字典格式
+
+### `models/media.py`
+- Media SQLAlchemy ORM 模型
+- 字段：id, userId, url, isVip, isVideo
+- 方法：to_dict() - 转换为字典格式
 
 ### `security/jwt.py`
 - 密码加密和验证（bcrypt）
@@ -61,6 +90,17 @@ chatstar_api/
 
 ### `routers/users.py`
 - `/api/user/info` - 获取当前用户信息（需要 Bearer token）
+- `/api/users` - 获取分页用户列表（需要 Bearer token）
+
+### `routers/orders.py`
+- `/api/order/create` - 创建订单
+- `/api/order/{orderNo}` - 根据订单号查询订单
+- `/api/orders/user/{userId}` - 获取用户的所有订单
+- `/api/order/verifyGoogle` - 验证 Google Play 购买
+
+### `routers/files.py`
+- `/api/upload` - 上传文件到 Zoho WorkDrive
+- `/api/link/{file_id}` - 根据文件 ID 生成直链
 
 ### `routers/web.py`
 - `/terms` - 服务条款页面

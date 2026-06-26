@@ -18,9 +18,9 @@ class Product(Base):
     callCardNum = Column(Integer, default=0)
     matchCardNum = Column(Integer, default=0)
     chatCardNum = Column(Integer, default=0)
-    discountType=Column(Integer, default=0)
+    discountType = Column(Integer, default=0)
 
-    def toJson(self):
+    def to_dict(self):
         return {
             "sku": self.sku,
             "productType": self.productType,

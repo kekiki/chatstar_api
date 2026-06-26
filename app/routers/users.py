@@ -19,7 +19,7 @@ def get_user_info(user: User = Depends(current_user)):
     """Get current user information."""
     return {
         "code": 200,
-        "data": user.toJson()
+        "data": user.to_dict()
     }
 
 
@@ -37,7 +37,7 @@ def list_users(page: int = 1, page_size: int = 20, db: Session = Depends(get_db)
     total = db.query(func.count(User.id)).scalar() or 0
     offset = (page - 1) * page_size
     rows: List[User] = db.query(User).order_by(User.id).offset(offset).limit(page_size).all()
-    items = [r.toJson() for r in rows]
+    items = [r.to_dict() for r in rows]
 
     return {
         "code": 200,

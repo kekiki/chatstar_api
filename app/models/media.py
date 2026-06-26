@@ -15,7 +15,7 @@ class Media(Base):
     isVip = Column(Boolean, default=False)
     isVideo = Column(Boolean, default=False)
 
-    def toJson(self):
+    def to_dict(self):
         return {
             "userId": self.userId,
             "url": self.url,

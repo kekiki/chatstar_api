@@ -23,7 +23,7 @@ class Order(Base):
     matchCardNum = Column(Integer, default=0)
     chatCardNum = Column(Integer, default=0)
 
-    def toJson(self):
+    def to_dict(self):
         return {
             "orderId": self.id,
             "userId": self.userId,
