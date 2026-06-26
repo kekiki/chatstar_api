@@ -23,23 +23,23 @@ router = APIRouter(prefix="/api", tags=["orders"])
 @router.post("/order/create")
 def create_order(data: CreateOrderRequest, db: Session = Depends(get_db)):
     """Create a new order record."""
-    order_no = data.orderNo or f"local-{int(time.time())}-{uuid.uuid4().hex[:8]}"
-    existing = db.query(Order).filter(Order.orderNo == order_no).first()
+    order_no = data.order_no or f"local-{int(time.time())}-{uuid.uuid4().hex[:8]}"
+    existing = db.query(Order).filter(Order.order_no == order_no).first()
     if existing:
-        raise HTTPException(status_code=400, detail="orderNo already exists")
+        raise HTTPException(status_code=400, detail="order_no already exists")
 
     order = Order(
-        userId=data.userId,
-        orderNo=order_no,
-        productId=data.productId,
-        productType=data.productType,
-        currencyCode=data.currencyCode,
-        currencyPrice=data.currencyPrice,
-        vipDays=data.vipDays,
-        callCardNum=data.callCardNum,
-        matchCardNum=data.matchCardNum,
-        chatCardNum=data.chatCardNum,
-        createdAt=int(time.time())
+        user_id=data.user_id,
+        order_no=order_no,
+        product_id=data.product_id,
+        product_type=data.product_type,
+        currency_code=data.currency_code,
+        currency_price=data.currency_price,
+        vip_days=data.vip_days,
+        call_card_num=data.call_card_num,
+        match_card_num=data.match_card_num,
+        chat_card_num=data.chat_card_num,
+        created_at=int(time.time())
     )
     db.add(order)
     db.commit()
@@ -48,19 +48,19 @@ def create_order(data: CreateOrderRequest, db: Session = Depends(get_db)):
     return {"code": 200, "data": order.to_dict()}
 
 
-@router.get("/order/{orderNo}")
-def get_order(orderNo: str, db: Session = Depends(get_db)):
-    """Get an order by its orderNo."""
-    order = db.query(Order).filter(Order.orderNo == orderNo).first()
+@router.get("/order/{order_no}")
+def get_order(order_no: str, db: Session = Depends(get_db)):
+    """Get an order by its order_no."""
+    order = db.query(Order).filter(Order.order_no == order_no).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return {"code": 200, "data": order.to_dict()}
 
 
-@router.get("/orders/user/{userId}")
-def get_orders_by_user(userId: int, db: Session = Depends(get_db)):
-    """Get all orders for a given userId."""
-    rows: List[Order] = db.query(Order).filter(Order.userId == userId).order_by(Order.id.desc()).all()
+@router.get("/orders/user/{user_id}")
+def get_orders_by_user(user_id: int, db: Session = Depends(get_db)):
+    """Get all orders for a given user_id."""
+    rows: List[Order] = db.query(Order).filter(Order.user_id == user_id).order_by(Order.id.desc()).all()
     items = [r.to_dict() for r in rows]
     return {"code": 200, "data": items}
 
@@ -153,19 +153,19 @@ def verify_google_order(data: VerifyGoogleRequest, db: Session = Depends(get_db)
     Expects `GOOGLE_ACCESS_TOKEN` env var to be set with a valid OAuth2 token.
     """
     try:
-        result = _verify_google_purchase_with_api(data.packageName, data.productId, data.purchaseToken)
+        result = _verify_google_purchase_with_api(data.package_name, data.product_id, data.purchase_token)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
     # Example: response contains `purchaseState` (0 = purchased)
     purchase_state = result.get("purchaseState")
 
-    order = db.query(Order).filter(Order.orderNo == data.orderNo).first()
+    order = db.query(Order).filter(Order.order_no == data.order_no).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
     if purchase_state == 0:
-        order.orderStatus = 1  # mark paid
+        order.order_status = 1  # mark paid
         db.add(order)
         db.commit()
         db.refresh(order)

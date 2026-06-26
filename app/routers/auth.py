@@ -60,13 +60,13 @@ def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     nickname = payload.get("name")
     avatar = payload.get("picture")
 
-    user = db.query(User).filter(User.googleId == google_id).first()
+    user = db.query(User).filter(User.google_id == google_id).first()
     if not user and email:
         user = db.query(User).filter(User.email == email).first()
 
     if user:
-        if not user.googleId:
-            user.googleId = google_id
+        if not user.google_id:
+            user.google_id = google_id
         if email and not user.email:
             user.email = email
         if nickname:
@@ -75,11 +75,11 @@ def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
             user.avatar = avatar
     else:
         user = User(
-            googleId=google_id,
+            google_id=google_id,
             email=email,
             nickname=nickname,
             avatar=avatar,
-            createdAt=int(time.time())
+            created_time=int(time.time())
         )
         db.add(user)
 
@@ -100,7 +100,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     if not deviceId:
         raise HTTPException(status_code=400, detail="Missing device_id header")
 
-    user = db.query(User).filter(User.deviceId == deviceId).first()
+    user = db.query(User).filter(User.device_id == device_id).first()
     if user:
         token = create_token({"sub": user.id})
         return {
@@ -110,7 +110,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     
     timeinterval = time.time()
     # Create user, let DB assign primary key `id`
-    user = User(deviceId=deviceId, createdAt=int(timeinterval))
+    user = User(device_id=device_id, created_time=int(timeinterval))
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -7,41 +7,42 @@ import datetime
 
 class User(Base):
     """User model for SQLAlchemy ORM."""
-    __tablename__ = "users"
+    __tablename__ = "app_user"
     
     id = Column(Integer, primary_key=True, index=True)
-    deviceId = Column(String(64), index=True)
-    appId = Column(Integer, default=0)
-    createdAt = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
+    device_id = Column(String(64), index=True)
+    app_id = Column(Integer, default=0)
+    created_time = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
     country = Column(String(64), default="US")
+    ip = Column(String(64))
     nickname = Column(String(64))
     avatar = Column(String)
     email = Column(String(128), index=True)
-    googleId = Column(String(128), index=True)
+    google_id = Column(String(128), index=True)
     balance = Column(Integer, default=0)
-    isAnchor = Column(Boolean, default=False)
-    isVip = Column(Boolean, default=False)
-    vipExpireTime = Column(DateTime)
-    languageName = Column(String(64), default="English")
-    languageCode = Column(String(16), default="en")
-    followCount = Column(Integer, default=0)
-    fansCount = Column(Integer, default=0)
-    likeCount = Column(Integer, default=0)
+    is_vip = Column(Boolean, default=False)
+    vip_expire_time = Column(Integer)
+    language_name = Column(String(64), default="English")
+    language_code = Column(String(16), default="en")
+    follow_count = Column(Integer, default=0)
+    fans_count = Column(Integer, default=0)
+    like_count = Column(Integer, default=0)
+    is_check = Column(Boolean, default=False)
 
     def to_dict(self):
         return {
             "id": self.id,
-            "deviceId": self.deviceId,
+            "device_id": self.device_id,
             "country": self.country,
             "nickname": self.nickname,
             "avatar": self.avatar,
             "email": self.email,
             "balance": self.balance,
-            "isVip": self.isVip,
-            "vipExpireTime": self.vipExpireTime.isoformat() if self.vipExpireTime else None,
-            "languageName": self.languageName,
-            "languageCode": self.languageCode,
-            "followCount": self.followCount,
-            "fansCount": self.fansCount,
-            "likeCount": self.likeCount,
+            "is_vip": self.is_vip,
+            "vip_expire_time": self.vip_expire_time.isoformat() if self.vip_expire_time else None,
+            "language_name": self.language_name,
+            "language_code": self.language_code,
+            "follow_count": self.follow_count,
+            "fans_count": self.fans_count,
+            "like_count": self.like_count,
         }

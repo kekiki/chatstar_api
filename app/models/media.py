@@ -10,15 +10,15 @@ class Media(Base):
     __tablename__ = "medias"
     
     id = Column(Integer, primary_key=True, index=True)
-    userId = Column(String, index=True)
+    user_id = Column(String, index=True)
     url = Column(String, default="")
-    isVip = Column(Boolean, default=False)
-    isVideo = Column(Boolean, default=False)
+    is_vip = Column(Boolean, default=False)
+    is_video = Column(Boolean, default=False)
 
     def to_dict(self):
         return {
-            "userId": self.userId,
+            "user_id": self.user_id,
             "url": self.url,
-            "isVip": self.isVip,
-            "isVideo": self.isVideo,
+            "is_vip": self.is_vip,
+            "is_video": self.is_video,
         }

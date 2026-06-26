@@ -3,20 +3,20 @@ from typing import Optional
 
 
 class CreateOrderRequest(BaseModel):
-    userId: int
-    orderNo: Optional[str] = None
-    productId: str
-    productType: int = 0
-    currencyCode: str = "USD"
-    currencyPrice: int = 0
-    vipDays: int = 0
-    callCardNum: int = 0
-    matchCardNum: int = 0
-    chatCardNum: int = 0
+    user_id: int
+    order_no: Optional[str] = None
+    product_id: str
+    product_type: int = 0
+    currency_code: str = "USD"
+    currency_price: int = 0
+    vip_days: int = 0
+    call_card_num: int = 0
+    match_card_num: int = 0
+    chat_card_num: int = 0
 
 
 class VerifyGoogleRequest(BaseModel):
-    orderNo: str
-    purchaseToken: str
-    productId: str
-    packageName: str
+    order_no: str
+    purchase_token: str
+    product_id: str
+    package_name: str

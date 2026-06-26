@@ -11,24 +11,24 @@ class Product(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String, unique=True, index=True)
-    productType = Column(Integer, default=0)
-    currencyCode = Column(String, default="USD")
-    currencyPrice = Column(Integer, default=0)
-    vipDays = Column(Integer, default=0)
-    callCardNum = Column(Integer, default=0)
-    matchCardNum = Column(Integer, default=0)
-    chatCardNum = Column(Integer, default=0)
-    discountType = Column(Integer, default=0)
+    product_type = Column(Integer, default=0)
+    currency_code = Column(String, default="USD")
+    currency_price = Column(Integer, default=0)
+    vip_days = Column(Integer, default=0)
+    call_card_num = Column(Integer, default=0)
+    match_card_num = Column(Integer, default=0)
+    chat_card_num = Column(Integer, default=0)
+    discount_type = Column(Integer, default=0)
 
     def to_dict(self):
         return {
             "sku": self.sku,
-            "productType": self.productType,
-            "currencyCode": self.currencyCode,
-            "currencyPrice": self.currencyPrice,
-            "vipDays": self.vipDays,
-            "callCardNum": self.callCardNum,
-            "matchCardNum": self.matchCardNum,
-            "chatCardNum": self.chatCardNum,
-            "discountType": self.discountType,
+            "product_type": self.product_type,
+            "currency_code": self.currency_code,
+            "currency_price": self.currency_price,
+            "vip_days": self.vip_days,
+            "call_card_num": self.call_card_num,
+            "match_card_num": self.match_card_num,
+            "chat_card_num": self.chat_card_num,
+            "discount_type": self.discount_type,
         }
