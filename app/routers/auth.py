@@ -3,9 +3,11 @@ Authentication routes: register and login.
 """
 import json
 import time
+import random
 import urllib.error
 import urllib.parse
 import urllib.request
+import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -15,10 +17,123 @@ from app.database import get_db
 from app.models import User, AppList
 from app.security import create_token
 from app.schemas import GoogleLoginRequest
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
+class IPInfoResp(BaseModel):
+    success: bool
+    ip: str | None = None
+    country: str | None = None
+    country_code: str | None = None
+    region: str | None = None
+    city: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    asn: str | None = None
+    isp: str | None = None
+    message: str | None = None
 
+def get_client_real_ip(request: Request) -> str:
+    """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
+    # Cloudflare 专用头
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+
+    # Railway/通用 X-Forwarded-For
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        first_ip = xff.split(",")[0].strip()
+        return first_ip
+
+    xri = request.headers.get("x-real-ip")
+    if xri:
+        return xri.strip()
+
+    # 兜底
+    return request.client.host
+
+
+def query_ip_online(ip: str) -> IPInfoResp:
+    """调用海外稳定接口 ipapi.co，无需离线库"""
+    try:
+        timeout = 6
+        resp = requests.get(f"https://ipapi.co/{ip}/json/", timeout=timeout)
+        data = resp.json()
+
+        # 接口返回错误标记
+        if "error" in data:
+            return IPInfoResp(
+                success=False,
+                ip=ip,
+                message=f"Lookup failed: {data.get('reason', 'invalid ip')}"
+            )
+
+        return IPInfoResp(
+            success=True,
+            ip=data.get("ip"),
+            country=data.get("country_name"),
+            country_code=data.get("country_code"),
+            region=data.get("region"),
+            city=data.get("city"),
+            latitude=data.get("latitude"),
+            longitude=data.get("longitude"),
+            asn=data.get("asn"),
+            isp=data.get("org")
+        )
+
+    except requests.exceptions.RequestException as e:
+        return IPInfoResp(
+            success=False,
+            ip=ip,
+            message=f"External API request error: {str(e)}"
+        )
+    except Exception as e:
+        return IPInfoResp(
+            success=False,
+            ip=ip,
+            message=f"Server internal error: {str(e)}"
+        )
+
+
+def query_ip_china(ip):
+    try:
+        timeout = 6
+        resp = requests.get(f"http://ip-api.com/json/{ip}?lang=en", timeout=timeout)
+        data = resp.json()
+        if data["status"] != "success":
+            return IPInfoResp(success=False, ip=ip, message=data.get("message", "no data"))
+        return IPInfoResp(
+            success=True,
+            ip=data["query"],
+            country=data["country"],
+            country_code=data["countryCode"],
+            region=data["regionName"],
+            city=data["city"],
+            latitude=data["lat"],
+            longitude=data["lon"],
+            asn=str(data.get("as")),
+            isp=data["isp"]
+        )
+    except requests.exceptions.RequestException as e:
+        return IPInfoResp(
+            success=False,
+            ip=ip,
+            message=f"External API request error: {str(e)}"
+        )
+    except Exception as e:
+        return IPInfoResp(
+            success=False,
+            ip=ip,
+            message=f"Server internal error: {str(e)}"
+        )
+
+def get_ip_info(client_ip: str) -> IPInfoResp:
+    info = query_ip_online(client_ip)
+    if not info.success:
+        return query_ip_china(client_ip)
+    return info
 
 def verify_google_id_token(id_token: str) -> dict:
     """Verify a Google ID token using Google's tokeninfo endpoint."""
@@ -86,7 +201,7 @@ def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_token({"sub": user.id})
+    token = create_token({"sub": user.user_id})
     return {
         "code": 200,
         "data": {"accessToken": token}
@@ -116,8 +231,10 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
             "data": {"accessToken": token}
         }
     
-    # Create user, let DB assign primary key `id`
-    user = User(device_id=device_id, app_id=package.id)
+    client_ip = get_client_real_ip(request)
+    ip_info = get_ip_info(client_ip)
+    is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
+    user = User(device_id=device_id, app_id=package.id, ip=client_ip, country=ip_info.country, is_check=is_check)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -127,22 +244,3 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
         "code": 200,
         "data": {"accessToken": token}
     }
-
-
-# @router.post("/loginPassword")
-# def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-#     """Login with user_id and password."""
-#     try:
-#         uid = int(form_data.username)
-#     except Exception:
-#         raise HTTPException(status_code=401, detail="Invalid username or password")
-
-#     user = db.query(User).filter(User.id == uid).first()
-#     if not user or not verify_password(form_data.password, user.hashed_password):
-#         raise HTTPException(401, "Invalid username or password")
-    
-#     token = create_token({"sub": user.id})
-#     return {
-#         "code": 200,
-#         "data": {"accessToken": token}
-#     }
