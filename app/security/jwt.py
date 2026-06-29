@@ -45,16 +45,11 @@ def current_user(
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(401, "Invalid authorization")
-        try:
-            uid = int(user_id)
-        except Exception:
-            raise HTTPException(401, "Invalid authorization")
 
-        user = db.query(User).filter(User.id == uid).first()
+        user = db.query(User).filter(User.user_id == int(user_id)).first()
         if not user:
             raise HTTPException(401, "User not found")
         
-        user.id = int(user.id) + 100000000  # Offset user ID by 100 million for external use
         return user
     except JWTError:
         raise HTTPException(401, "Invalid token")

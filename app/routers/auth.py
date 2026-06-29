@@ -225,21 +225,22 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.device_id == device_id).first()
     if user:
-        token = create_token({"sub": user.id})
+        token = create_token({"sub": user.user_id})
         return {
             "code": 200,
             "data": {"accessToken": token}
         }
     
+    user_id = random.randint(1000000, 9999999) + 80000000
     client_ip = get_client_real_ip(request)
     ip_info = get_ip_info(client_ip)
     is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
-    user = User(device_id=device_id, app_id=package.id, ip=client_ip, country=ip_info.country, is_check=is_check)
+    user = User(user_id=user_id, device_id=device_id, app_id=package.id, ip=client_ip, country=ip_info.country, is_check=is_check)
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    token = create_token({"sub": user.id})
+    token = create_token({"sub": user.user_id})
     return {
         "code": 200,
         "data": {"accessToken": token}

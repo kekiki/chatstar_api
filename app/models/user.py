@@ -10,6 +10,7 @@ class User(Base):
     __tablename__ = "app_users"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
     device_id = Column(String(100), index=True)
     app_id = Column(Integer, default=0)
     created_time = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
@@ -31,7 +32,7 @@ class User(Base):
 
     def to_dict(self):
         return {
-            "user_id": self.id,
+            "user_id": self.user_id,
             "device_id": self.device_id,
             "country": self.country,
             "nickname": self.nickname,
