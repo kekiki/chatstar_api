@@ -33,8 +33,8 @@ def list_anchors(
     - page: Page number (default 1)
     - page_size: Items per page (default 20, max 100)
     """
-    # Build base query with Media join
-    query = db.query(Anchor).join(Media, Anchor.user_id == Media.user_id)
+    # Build base query
+    query = db.query(Anchor)
     
     # Apply filters
     if country:
@@ -54,10 +54,19 @@ def list_anchors(
     offset = (page - 1) * page_size
     anchors = query.offset(offset).limit(page_size).all()
     
+    # Build response with media for each anchor
+    items = []
+    for anchor in anchors:
+        anchor_dict = anchor.to_dict()
+        # Query media for this anchor
+        medias = db.query(Media).filter(Media.user_id == str(anchor.user_id)).all()
+        anchor_dict["media_list"] = [media.to_dict() for media in medias]
+        items.append(anchor_dict)
+    
     return {
         "code": 200,
         "data": {
-            "items": [anchor.to_dict() for anchor in anchors],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,

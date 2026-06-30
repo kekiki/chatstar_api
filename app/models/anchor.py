@@ -20,9 +20,7 @@ class Anchor(Base):
     
     def to_dict(self):
         return {
-            "id": self.id,
             "user_id": self.user_id,
-            "created_time": self.created_time,
             "country": self.country,
             "nickname": self.nickname,
             "avatar": self.avatar,
@@ -32,5 +30,4 @@ class Anchor(Base):
             "follow_count": self.follow_count,
             "fans_count": self.fans_count,
             "like_count": self.like_count,
-            "is_check": self.is_check,
         }
