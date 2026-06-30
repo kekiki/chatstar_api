@@ -13,8 +13,8 @@ from app.models.media import Media
 router = APIRouter(prefix="/api", tags=["anchor"])
 
 
-@router.get("/anchors")
-def list_anchors(
+@router.get("/getAnchors")
+def get_anchors(
     db: Session = Depends(get_db),
     sort_by: Literal["like_count", "created_time", "follow_count", "fans_count"] = Query(
         default="like_count", description="Sort field"
