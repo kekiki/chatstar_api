@@ -1,0 +1,66 @@
+"""
+Anchor routes: list anchors with sorting, filtering, and pagination.
+"""
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+from typing import Optional, Literal
+
+from app.database import get_db
+from app.models.anchor import Anchor
+from app.models.media import Media
+
+router = APIRouter(prefix="/api", tags=["anchor"])
+
+
+@router.get("/anchors")
+def list_anchors(
+    db: Session = Depends(get_db),
+    sort_by: Literal["like_count", "created_time", "follow_count", "fans_count"] = Query(
+        default="like_count", description="Sort field"
+    ),
+    country: Optional[str] = Query(default=None, description="Filter by country"),
+    language_code: Optional[str] = Query(default=None, description="Filter by language code"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page")
+):
+    """
+    List anchors with sorting, filtering, and pagination.
+    
+    - sort_by: Sort by like_count (default), created_time, follow_count, or fans_count (all descending)
+    - country: Filter anchors by country
+    - language_code: Filter anchors by language code
+    - page: Page number (default 1)
+    - page_size: Items per page (default 20, max 100)
+    """
+    # Build base query with Media join
+    query = db.query(Anchor).join(Media, Anchor.user_id == Media.user_id)
+    
+    # Apply filters
+    if country:
+        query = query.filter(Anchor.country == country)
+    
+    if language_code:
+        query = query.filter(Anchor.language_code == language_code)
+    
+    # Apply sorting (always descending)
+    sort_column = getattr(Anchor, sort_by)
+    query = query.order_by(desc(sort_column))
+    
+    # Get total count
+    total = query.count()
+    
+    # Apply pagination
+    offset = (page - 1) * page_size
+    anchors = query.offset(offset).limit(page_size).all()
+    
+    return {
+        "code": 200,
+        "data": {
+            "items": [anchor.to_dict() for anchor in anchors],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size
+        }
+    }
