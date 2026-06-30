@@ -232,10 +232,11 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
         }
     
     user_id = random.randint(1000000, 9999999) + 80000000
+    nickname = f"User{user_id}"
     client_ip = get_client_real_ip(request)
     ip_info = get_ip_info(client_ip)
     is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
-    user = User(user_id=user_id, device_id=device_id, app_id=package.id, ip=client_ip, country=ip_info.country, is_check=is_check)
+    user = User(user_id=user_id, device_id=device_id, app_id=package.id, ip=client_ip, country=ip_info.country, is_check=is_check, nickname=nickname)
     db.add(user)
     db.commit()
     db.refresh(user)
