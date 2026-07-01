@@ -2,7 +2,7 @@
 JWT and password authentication utilities.
 """
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -36,12 +36,21 @@ def create_token(data: dict) -> str:
 
 
 def current_user(
-    token: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user from token."""
+    if not authorization:
+        raise HTTPException(401, "Missing Authorization header")
+    
+    # Support both "Bearer <token>" and "<token>" formats
+    if authorization.startswith("Bearer "):
+        token_str = authorization[7:]  # Remove "Bearer " prefix
+    else:
+        token_str = authorization  # Use the whole header as token
+    
     try:
-        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(401, "Invalid authorization")
@@ -51,5 +60,5 @@ def current_user(
             raise HTTPException(401, "User not found")
         
         return user
-    except JWTError:
-        raise HTTPException(401, "Invalid token")
+    except JWTError as e:
+        raise HTTPException(401, f"Invalid token: {str(e)}")

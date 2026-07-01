@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api", tags=["anchor"])
 
 
 @router.get("/getAnchors")
-def get_anchors(
+def get_anchors( 
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
     sort_by: Literal["like_count", "created_time", "follow_count", "fans_count"] = Query(
