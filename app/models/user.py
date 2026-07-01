@@ -33,14 +33,13 @@ class User(Base):
     def to_dict(self):
         return {
             "user_id": self.user_id,
-            "device_id": self.device_id,
             "country": self.country,
             "nickname": self.nickname,
             "avatar": self.avatar,
             "email": self.email,
             "balance": self.balance,
             "is_vip": self.is_vip,
-            "vip_expire_time": self.vip_expire_time.isoformat() if self.vip_expire_time else None,
+            "vip_expire_time": self.vip_expire_time,
             "language_name": self.language_name,
             "language_code": self.language_code,
             "follow_count": self.follow_count,

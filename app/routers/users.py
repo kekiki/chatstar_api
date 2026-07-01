@@ -1,12 +1,8 @@
 """
 User information routes.
 """
-from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-
+from fastapi import APIRouter, Depends
 from app.models import User
 from app.security import current_user
 from app.database import get_db
