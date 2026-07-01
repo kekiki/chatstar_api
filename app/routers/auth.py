@@ -201,7 +201,7 @@ def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_token({"sub": user.user_id})
+    token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
         "data": {"accessToken": token}
@@ -225,7 +225,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.device_id == device_id).first()
     if user:
-        token = create_token({"sub": user.user_id})
+        token = create_token({"sub": str(user.user_id)})
         return {
             "code": 200,
             "data": {"accessToken": token}
@@ -241,7 +241,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_token({"sub": user.user_id})
+    token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
         "data": {"accessToken": token}
