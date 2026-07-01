@@ -13,15 +13,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Order
+from app.models import Order, User
 from app.schemas.order_request import CreateOrderRequest, VerifyGoogleRequest
+from app.security import current_user
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
 
 
 @router.post("/order/create")
-def create_order(data: CreateOrderRequest, db: Session = Depends(get_db)):
+def create_order(data: CreateOrderRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Create a new order record."""
     order_no = data.order_no or f"local-{int(time.time())}-{uuid.uuid4().hex[:8]}"
     existing = db.query(Order).filter(Order.order_no == order_no).first()
@@ -29,7 +30,7 @@ def create_order(data: CreateOrderRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="order_no already exists")
 
     order = Order(
-        user_id=data.user_id,
+        user_id=user.user_id,
         order_no=order_no,
         product_id=data.product_id,
         product_type=data.product_type,
@@ -49,17 +50,19 @@ def create_order(data: CreateOrderRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/order/{order_no}")
-def get_order(order_no: str, db: Session = Depends(get_db)):
+def get_order(order_no: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Get an order by its order_no."""
-    order = db.query(Order).filter(Order.order_no == order_no).first()
+    order = db.query(Order).filter(Order.order_no == order_no, Order.user_id == user.user_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return {"code": 200, "data": order.to_dict()}
 
 
 @router.get("/orders/user/{user_id}")
-def get_orders_by_user(user_id: int, db: Session = Depends(get_db)):
+def get_orders_by_user(user_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Get all orders for a given user_id."""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     rows: List[Order] = db.query(Order).filter(Order.user_id == user_id).order_by(Order.id.desc()).all()
     items = [r.to_dict() for r in rows]
     return {"code": 200, "data": items}
@@ -147,7 +150,7 @@ def _verify_google_purchase_with_api(package_name: str, product_id: str, token: 
 
 
 @router.post("/order/verifyGoogle")
-def verify_google_order(data: VerifyGoogleRequest, db: Session = Depends(get_db)):
+def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Verify a Google Play in-app purchase and update order status.
 
     Expects `GOOGLE_ACCESS_TOKEN` env var to be set with a valid OAuth2 token.
@@ -160,7 +163,7 @@ def verify_google_order(data: VerifyGoogleRequest, db: Session = Depends(get_db)
     # Example: response contains `purchaseState` (0 = purchased)
     purchase_state = result.get("purchaseState")
 
-    order = db.query(Order).filter(Order.order_no == data.order_no).first()
+    order = db.query(Order).filter(Order.order_no == data.order_no, Order.user_id == user.user_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 

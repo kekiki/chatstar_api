@@ -9,12 +9,15 @@ from typing import Optional, Literal
 from app.database import get_db
 from app.models.anchor import Anchor
 from app.models.media import Media
+from app.security import current_user
+from app.models import User
 
 router = APIRouter(prefix="/api", tags=["anchor"])
 
 
 @router.get("/getAnchors")
 def get_anchors(
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
     sort_by: Literal["like_count", "created_time", "follow_count", "fans_count"] = Query(
         default="like_count", description="Sort field"
