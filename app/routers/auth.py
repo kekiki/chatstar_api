@@ -16,7 +16,7 @@ from app.config import GOOGLE_CLIENT_ID
 from app.database import get_db
 from app.models import User, AppList
 from app.security import create_token
-from app.schemas import GoogleLoginRequest
+from app.schemas import GoogleLogin
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -135,69 +135,52 @@ def get_ip_info(client_ip: str) -> IPInfoResp:
         return query_ip_china(client_ip)
     return info
 
-def verify_google_id_token(id_token: str) -> dict:
-    """Verify a Google ID token using Google's tokeninfo endpoint."""
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID is not configured")
-
-    token_info_url = (
-        "https://oauth2.googleapis.com/tokeninfo?id_token="
-        + urllib.parse.quote(id_token)
-    )
-
-    try:
-        with urllib.request.urlopen(token_info_url, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError:
-        raise HTTPException(status_code=401, detail="Invalid Google ID token")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Unable to verify Google token")
-
-    if payload.get("aud") != GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=401, detail="Google token audience mismatch")
-
-    verified = str(payload.get("email_verified", "false")).lower() == "true"
-    if not verified:
-        raise HTTPException(status_code=401, detail="Google email is not verified")
-
-    return payload
-
-
 @router.post("/loginGoogle")
-def login_google(data: GoogleLoginRequest, db: Session = Depends(get_db)):
-    """Login or register a user using a Google ID token."""
-    payload = verify_google_id_token(data.id_token)
-    google_id = payload.get("sub")
-    if not google_id:
-        raise HTTPException(status_code=401, detail="Invalid Google token payload")
+def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_db)):
+    """Login or register a user using Google account."""
+    device_id = request.headers.get("device-id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Missing device_id header")
 
-    email = payload.get("email")
-    nickname = payload.get("name")
-    avatar = payload.get("picture")
+    package_name = request.headers.get("package-name")
+    if not package_name:
+        raise HTTPException(status_code=400, detail="Missing package_name header")
 
-    user = db.query(User).filter(User.google_id == google_id).first()
-    if not user and email:
-        user = db.query(User).filter(User.email == email).first()
+    package = db.query(AppList).filter(AppList.package_name == package_name).first()
+    if not package:
+        raise HTTPException(status_code=400, detail="Invalid package_name")
+
+    user = db.query(User).filter(User.google_id == data.user_id).first()
+    if not user and data.email:
+        user = db.query(User).filter(User.email == data.email).first()
 
     if user:
-        if not user.google_id:
-            user.google_id = google_id
-        if email and not user.email:
-            user.email = email
-        if nickname:
-            user.nickname = nickname
-        if avatar:
-            user.avatar = avatar
-    else:
-        user = User(
-            google_id=google_id,
-            email=email,
-            nickname=nickname,
-            avatar=avatar,
-            created_time=int(time.time())
-        )
-        db.add(user)
+        token = create_token({"sub": str(user.user_id)})
+        return {
+            "code": 200,
+            "data": {"accessToken": token}
+        }
 
+    user_id = random.randint(1000000, 9999999) + 80000000
+    nickname = data.nickname if data.nickname else f"User{user_id}"
+    client_ip = get_client_real_ip(request)
+    ip_info = get_ip_info(client_ip)
+
+    # app_info = db.query(AppList).filter(AppList.id == package.id).first()
+    is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
+    user = User(
+        user_id=user_id, 
+        device_id=device_id, 
+        app_id=package.id, 
+        ip=client_ip, 
+        country=ip_info.country, 
+        is_check=is_check, 
+        nickname=nickname,
+        email=data.email,
+        google_id=data.user_id,
+        avatar=data.avatar
+    )
+    db.add(user)
     db.commit()
     db.refresh(user)
 
@@ -236,7 +219,15 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     client_ip = get_client_real_ip(request)
     ip_info = get_ip_info(client_ip)
     is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
-    user = User(user_id=user_id, device_id=device_id, app_id=package.id, ip=client_ip, country=ip_info.country, is_check=is_check, nickname=nickname)
+    user = User(
+        user_id=user_id, 
+        device_id=device_id, 
+        app_id=package.id, 
+        ip=client_ip, 
+        country=ip_info.country, 
+        is_check=is_check, 
+        nickname=nickname
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -29,6 +29,14 @@ class User(Base):
     fans_count = Column(Integer, default=0)
     like_count = Column(Integer, default=0)
     is_check = Column(Boolean, default=False)
+    # Install referrer tracking
+    install_referrer = Column(String(255))
+    referrer_click_timestamp_seconds = Column(Integer)
+    install_begin_timestamp_seconds = Column(Integer)
+    referrer_click_timestamp_server_seconds = Column(Integer)
+    install_begin_timestamp_server_seconds = Column(Integer)
+    install_version = Column(String(64))
+    google_play_instant = Column(Boolean, default=False)
 
     def to_dict(self):
         return {
@@ -45,4 +53,11 @@ class User(Base):
             "follow_count": self.follow_count,
             "fans_count": self.fans_count,
             "like_count": self.like_count,
+            "install_referrer": self.install_referrer,
+            "referrer_click_timestamp_seconds": self.referrer_click_timestamp_seconds,
+            "install_begin_timestamp_seconds": self.install_begin_timestamp_seconds,
+            "referrer_click_timestamp_server_seconds": self.referrer_click_timestamp_server_seconds,
+            "install_begin_timestamp_server_seconds": self.install_begin_timestamp_server_seconds,
+            "install_version": self.install_version,
+            "google_play_instant": self.google_play_instant,
         }
