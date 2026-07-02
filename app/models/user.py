@@ -53,11 +53,5 @@ class User(Base):
             "follow_count": self.follow_count,
             "fans_count": self.fans_count,
             "like_count": self.like_count,
-            "install_referrer": self.install_referrer,
-            "referrer_click_timestamp_seconds": self.referrer_click_timestamp_seconds,
-            "install_begin_timestamp_seconds": self.install_begin_timestamp_seconds,
-            "referrer_click_timestamp_server_seconds": self.referrer_click_timestamp_server_seconds,
-            "install_begin_timestamp_server_seconds": self.install_begin_timestamp_server_seconds,
-            "install_version": self.install_version,
-            "google_play_instant": self.google_play_instant,
+            "r_flag": self.is_check,
         }
