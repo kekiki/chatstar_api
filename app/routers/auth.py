@@ -168,6 +168,7 @@ def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_
 
     # app_info = db.query(AppList).filter(AppList.id == package.id).first()
     is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
+    agent = request.headers.get("user-agent")
     user = User(
         user_id=user_id, 
         device_id=device_id, 
@@ -178,7 +179,8 @@ def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_
         nickname=nickname,
         email=data.email,
         google_id=data.user_id,
-        avatar=data.avatar
+        avatar=data.avatar,
+        agent=agent
     )
     db.add(user)
     db.commit()
@@ -219,6 +221,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     client_ip = get_client_real_ip(request)
     ip_info = get_ip_info(client_ip)
     is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
+    agent = request.headers.get("user-agent")
     user = User(
         user_id=user_id, 
         device_id=device_id, 
@@ -226,7 +229,8 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
         ip=client_ip, 
         country=ip_info.country, 
         is_check=is_check, 
-        nickname=nickname
+        nickname=nickname,
+        agent=agent
     )
     db.add(user)
     db.commit()

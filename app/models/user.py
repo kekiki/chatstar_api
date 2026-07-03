@@ -29,6 +29,7 @@ class User(Base):
     fans_count = Column(Integer, default=0)
     like_count = Column(Integer, default=0)
     is_check = Column(Boolean, default=False)
+    agent = Column(String(255))
     # Install referrer tracking
     install_referrer = Column(String(255))
     referrer_click_timestamp_seconds = Column(Integer)
