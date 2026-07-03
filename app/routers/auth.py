@@ -158,7 +158,7 @@ def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_
         token = create_token({"sub": str(user.user_id)})
         return {
             "code": 200,
-            "data": {"accessToken": token}
+            "data": {"accessToken": token, "user": user.to_dict()}
         }
 
     user_id = random.randint(1000000, 9999999) + 80000000
@@ -189,7 +189,7 @@ def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
-        "data": {"accessToken": token}
+        "data": {"accessToken": token, "user": user.to_dict()}
     }
 
 
@@ -213,7 +213,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
         token = create_token({"sub": str(user.user_id)})
         return {
             "code": 200,
-            "data": {"accessToken": token}
+            "data": {"accessToken": token, "user": user.to_dict()}
         }
     
     user_id = random.randint(1000000, 9999999) + 80000000
@@ -239,5 +239,5 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
-        "data": {"accessToken": token}
+        "data": {"accessToken": token, "user": user.to_dict()}
     }
