@@ -1,18 +1,12 @@
 """
 Authentication routes: register and login.
 """
-import json
-import time
+
 import random
-import urllib.error
-import urllib.parse
-import urllib.request
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.config import GOOGLE_CLIENT_ID
 from app.database import get_db
 from app.models import User, AppList
 from app.security import create_token
