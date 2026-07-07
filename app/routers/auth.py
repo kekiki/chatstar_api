@@ -59,7 +59,8 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
             # ip记录到审核名单
             black_white_ip = BlackWhiteIp(
                 ip=_get_client_real_ip(request),
-                status=0
+                status=0,
+                remarks=f"用户{user_id}注册IP归属ISP为{isp}"
             )
             db.add(black_white_ip)
             db.commit()
@@ -67,7 +68,8 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
             # 用户记录到审核名单
             black_white_user = BlackWhiteUser(
                 user_id=user_id,
-                status=0
+                status=0,
+                remarks=f"注册IP归属ISP为{isp}"
             )
             db.add(black_white_user)
             db.commit()
@@ -81,7 +83,8 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
             # 设备记录到审核名单
             black_white_device = BlackWhiteDevice(
                 device_id=device_id,
-                status=0
+                status=0,
+                remarks=f"用户{user_id}注册设备为[{agent}]，注册IP归属地为[{ip_info.addr}]"
             )
             db.add(black_white_device)
             db.commit()
@@ -89,7 +92,8 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
             # 用户记录到审核名单
             black_white_user = BlackWhiteUser(
                 user_id=user_id,
-                status=0
+                status=0,
+                remarks=f"注册设备为[{agent}]，注册IP归属地为[{ip_info.addr}]"
             )
             db.add(black_white_user)
             db.commit()
