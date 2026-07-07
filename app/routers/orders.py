@@ -44,7 +44,6 @@ def create_order(data: CreateOrderRequest, user: User = Depends(current_user), d
     )
     db.add(order)
     db.commit()
-    db.refresh(order)
 
     return {"code": 200, "data": order.to_dict()}
 
@@ -171,6 +170,5 @@ def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_
         order.order_status = 1  # mark paid
         db.add(order)
         db.commit()
-        db.refresh(order)
 
     return {"code": 200, "data": {"verified": purchase_state == 0, "google": result}}

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User, AppList
+from app.models import User, AppList, BlackWhiteUser, BlackWhiteIp, BlackWhiteDevice
 from app.security import create_token
 from app.schemas import GoogleUserInfo
 from app.ip_location import ip_location, IPLocation
@@ -34,19 +34,65 @@ def _get_client_real_ip(request: Request) -> str:
     # 兜底
     return request.client.host
 
-    # 谷歌用户注册国家为美国/印度/菲律宾&&设备为Pad/pixel/OnePlus/google属于审核人员，标记审核名单[账号类型/设备类型]
-    # 苹果用户注册IP归属国家为[美国/爱尔兰/韩国/新加坡/以色列/印度/加拿大/澳大利亚]属于审核人员，标记审核名单[账号类型/IP类型]
+# 谷歌用户注册国家为美国/印度/菲律宾&&设备为Pad/pixel/OnePlus/google属于审核人员，标记审核名单[账号类型/设备类型]
+# 苹果用户注册IP归属国家为[美国/爱尔兰/韩国/新加坡/以色列/印度/加拿大/澳大利亚]属于审核人员，标记审核名单[账号类型/IP类型]
 def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip_info: IPLocation = None):
+
+    # 检查用户是否在审核名单中
+    black_white_user = db.query(BlackWhiteUser).filter(BlackWhiteUser.user_id == user_id).first()
+    if black_white_user and black_white_user.status == 0:
+        return True
+    
+    # 检查IP是否在审核名单中
+    black_white_ip = db.query(BlackWhiteIp).filter(BlackWhiteIp.ip == _get_client_real_ip(request)).first()
+    if black_white_ip and black_white_ip.status == 0:
+        return True
+    
+    # 检查设备是否在审核名单中
+    black_white_device = db.query(BlackWhiteDevice).filter(BlackWhiteDevice.device_id == device_id).first()
+    if black_white_device and black_white_device.status == 0:
+        return True
+
     if ip_info:
         isp = ip_info.isp.lower() if ip_info.isp else ""
         if 'google' in isp or 'apple' in isp:
+            # ip记录到审核名单
+            black_white_ip = BlackWhiteIp(
+                ip=_get_client_real_ip(request),
+                status=0
+            )
+            db.add(black_white_ip)
+            db.commit()
+            
+            # 用户记录到审核名单
+            black_white_user = BlackWhiteUser(
+                user_id=user_id,
+                status=0
+            )
+            db.add(black_white_user)
+            db.commit()
             return True
         
         # 检查设备类型
         agent_lower = agent.lower()
         is_device_check = 'pad' in agent_lower or 'tab' in agent_lower or 'pixel' in agent_lower or 'oneplus' in agent_lower or 'google' in agent_lower
-        is_country_check = ip_info.country in ['美国', '印度', '菲律宾'] or ip_info.country in ['United States', 'India', 'Philippines']
+        is_country_check = ip_info.country in ['美国', '印度', '菲律宾']
         if is_device_check and is_country_check:
+            # 设备记录到审核名单
+            black_white_device = BlackWhiteDevice(
+                device_id=device_id,
+                status=0
+            )
+            db.add(black_white_device)
+            db.commit()
+            
+            # 用户记录到审核名单
+            black_white_user = BlackWhiteUser(
+                user_id=user_id,
+                status=0
+            )
+            db.add(black_white_user)
+            db.commit()
             return True
 
     return False
@@ -76,7 +122,6 @@ def _create_user(request: Request, db: Session, package_id: int, googleUser: Goo
     )
     db.add(user)
     db.commit()
-    db.refresh(user)
     return user
 
 @router.post("/loginGoogle")

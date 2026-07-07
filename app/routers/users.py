@@ -31,7 +31,6 @@ def set_user_attribution(attribution: GoogleAttribution, user: User = Depends(cu
     user.install_version = attribution.install_version
     user.google_play_instant = attribution.google_play_instant
     db.commit()
-    db.refresh(user)
     return {
         "code": 200,
         "msg": "success"
