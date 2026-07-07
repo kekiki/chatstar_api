@@ -30,6 +30,7 @@ class User(Base):
     like_count = Column(Integer, default=0)
     is_check = Column(Boolean, default=False)
     agent = Column(String(255))
+    birthday = Column(int, default=lambda: int(datetime.datetime.now().timestamp() - 86400 * 365 * 25))
     # Install referrer tracking
     install_referrer = Column(String(255))
     referrer_click_timestamp_seconds = Column(Integer)
@@ -55,4 +56,5 @@ class User(Base):
             "fans_count": self.fans_count,
             "like_count": self.like_count,
             "r_flag": self.is_check,
+            "birthday": self.birthday,
         }
