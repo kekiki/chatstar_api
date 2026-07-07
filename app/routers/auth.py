@@ -106,7 +106,10 @@ def _create_user(request: Request, db: Session, package_id: int, googleUser: Goo
     device_id = request.headers.get("device-id")
     agent = request.headers.get("user-agent")
     user_id = random.randint(1000000, 9999999) + 80000000
-    nickname = googleUser.nickname if googleUser.nickname else f"User{user_id}"
+    if googleUser:
+        nickname = googleUser.nickname if googleUser.nickname else f"User{user_id}"
+    else:
+        nickname = f"User{user_id}"
     client_ip = _get_client_real_ip(request)
     ip_info = ip_location.get_ip_location(client_ip)
     is_check = _check_review_user(db, user_id, device_id, agent , ip_info)
