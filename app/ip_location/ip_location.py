@@ -5,7 +5,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 from qqwry import QQwry
 
 class IPLocationResult:
-    def __init__(self, addr, isp):
+    def __init__(self, ip, addr, isp):
+        self.ip = ip
         self.addr = addr
         self.isp = isp
         self.country = addr.split('–')[0] if addr else None
@@ -22,7 +23,7 @@ class IPLocation:
         if result is None:
             return None
         addr, isp = result
-        return IPLocationResult(addr, isp)
+        return IPLocationResult(ip, addr, isp)
 
 ip_location = IPLocation()
 

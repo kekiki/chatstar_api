@@ -44,7 +44,7 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
         return True
     
     # 检查IP是否在审核名单中
-    black_white_ip = db.query(BlackWhiteIp).filter(BlackWhiteIp.ip == _get_client_real_ip(request)).first()
+    black_white_ip = db.query(BlackWhiteIp).filter(BlackWhiteIp.ip == ip_info.ip).first()
     if black_white_ip and black_white_ip.status == 0:
         return True
     
