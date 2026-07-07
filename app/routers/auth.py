@@ -3,32 +3,18 @@ Authentication routes: register and login.
 """
 
 import random
-import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User, AppList
 from app.security import create_token
-from app.schemas import GoogleLogin
-from pydantic import BaseModel
+from app.schemas import GoogleUserInfo
+from app.ip_location import ip_location, IPLocation
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
-class IPInfoResp(BaseModel):
-    success: bool
-    ip: str | None = None
-    country: str | None = None
-    country_code: str | None = None
-    region: str | None = None
-    city: str | None = None
-    latitude: float | None = None
-    longitude: float | None = None
-    asn: str | None = None
-    isp: str | None = None
-    message: str | None = None
-
-def get_client_real_ip(request: Request) -> str:
+def _get_client_real_ip(request: Request) -> str:
     """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
     # Cloudflare 专用头
     cf_ip = request.headers.get("cf-connecting-ip")
@@ -48,89 +34,53 @@ def get_client_real_ip(request: Request) -> str:
     # 兜底
     return request.client.host
 
+    # 谷歌用户注册国家为美国/印度/菲律宾&&设备为Pad/pixel/OnePlus/google属于审核人员，标记审核名单[账号类型/设备类型]
+    # 苹果用户注册IP归属国家为[美国/爱尔兰/韩国/新加坡/以色列/印度/加拿大/澳大利亚]属于审核人员，标记审核名单[账号类型/IP类型]
+def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip_info: IPLocation = None):
+    if ip_info:
+        isp = ip_info.isp.lower() if ip_info.isp else ""
+        if 'google' in isp or 'apple' in isp:
+            return True
+        
+        # 检查设备类型
+        agent_lower = agent.lower()
+        is_device_check = 'pad' in agent_lower or 'tab' in agent_lower or 'pixel' in agent_lower or 'oneplus' in agent_lower or 'google' in agent_lower
+        is_country_check = ip_info.country in ['美国', '印度', '菲律宾'] or ip_info.country in ['United States', 'India', 'Philippines']
+        if is_device_check and is_country_check:
+            return True
 
-def query_ip_online(ip: str) -> IPInfoResp:
-    """调用海外稳定接口 ipapi.co，无需离线库"""
-    try:
-        timeout = 6
-        resp = requests.get(f"https://ipapi.co/{ip}/json/", timeout=timeout)
-        data = resp.json()
+    return False
 
-        # 接口返回错误标记
-        if "error" in data:
-            return IPInfoResp(
-                success=False,
-                ip=ip,
-                message=f"Lookup failed: {data.get('reason', 'invalid ip')}"
-            )
-
-        return IPInfoResp(
-            success=True,
-            ip=data.get("ip"),
-            country=data.get("country_name"),
-            country_code=data.get("country_code"),
-            region=data.get("region"),
-            city=data.get("city"),
-            latitude=data.get("latitude"),
-            longitude=data.get("longitude"),
-            asn=data.get("asn"),
-            isp=data.get("org")
-        )
-
-    except requests.exceptions.RequestException as e:
-        return IPInfoResp(
-            success=False,
-            ip=ip,
-            message=f"External API request error: {str(e)}"
-        )
-    except Exception as e:
-        return IPInfoResp(
-            success=False,
-            ip=ip,
-            message=f"Server internal error: {str(e)}"
-        )
-
-
-def query_ip_china(ip):
-    try:
-        timeout = 6
-        resp = requests.get(f"http://ip-api.com/json/{ip}?lang=en", timeout=timeout)
-        data = resp.json()
-        if data["status"] != "success":
-            return IPInfoResp(success=False, ip=ip, message=data.get("message", "no data"))
-        return IPInfoResp(
-            success=True,
-            ip=data["query"],
-            country=data["country"],
-            country_code=data["countryCode"],
-            region=data["regionName"],
-            city=data["city"],
-            latitude=data["lat"],
-            longitude=data["lon"],
-            asn=str(data.get("as")),
-            isp=data["isp"]
-        )
-    except requests.exceptions.RequestException as e:
-        return IPInfoResp(
-            success=False,
-            ip=ip,
-            message=f"External API request error: {str(e)}"
-        )
-    except Exception as e:
-        return IPInfoResp(
-            success=False,
-            ip=ip,
-            message=f"Server internal error: {str(e)}"
-        )
-
-def get_ip_info(client_ip: str) -> IPInfoResp:
-    info = query_ip_online(client_ip)
-    if not info.success:
-        return query_ip_china(client_ip)
-    return info
+def _create_user(request: Request, db: Session, package_id: int, googleUser: GoogleUserInfo = None):
+    """Create a new user in the database."""
+    device_id = request.headers.get("device-id")
+    agent = request.headers.get("user-agent")
+    user_id = random.randint(1000000, 9999999) + 80000000
+    nickname = googleUser.nickname if googleUser.nickname else f"User{user_id}"
+    client_ip = _get_client_real_ip(request)
+    ip_info = ip_location.get_ip_location(client_ip)
+    is_check = _check_review_user(db, user_id, device_id, agent , ip_info)
+    
+    user = User(
+        user_id=user_id,
+        device_id=device_id,
+        app_id=package_id,
+        ip=client_ip,
+        country=ip_info.addr,
+        is_check=is_check,
+        nickname=nickname,
+        google_id=googleUser.user_id,
+        email=googleUser.email,
+        avatar=googleUser.avatar,
+        agent=agent,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 @router.post("/loginGoogle")
-def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_db)):
+def login_google(request: Request, data: GoogleUserInfo, db: Session = Depends(get_db)):
     """Login or register a user using Google account."""
     device_id = request.headers.get("device-id")
     if not device_id:
@@ -155,31 +105,7 @@ def login_google(request: Request, data: GoogleLogin, db: Session = Depends(get_
             "data": {"accessToken": token, "user": user.to_dict()}
         }
 
-    user_id = random.randint(1000000, 9999999) + 80000000
-    nickname = data.nickname if data.nickname else f"User{user_id}"
-    client_ip = get_client_real_ip(request)
-    ip_info = get_ip_info(client_ip)
-
-    # app_info = db.query(AppList).filter(AppList.id == package.id).first()
-    is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
-    agent = request.headers.get("user-agent")
-    user = User(
-        user_id=user_id, 
-        device_id=device_id, 
-        app_id=package.id, 
-        ip=client_ip, 
-        country=ip_info.country, 
-        is_check=is_check, 
-        nickname=nickname,
-        email=data.email,
-        google_id=data.user_id,
-        avatar=data.avatar,
-        agent=agent
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
+    user = _create_user(request, db, package.id, data)
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
@@ -210,26 +136,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
             "data": {"accessToken": token, "user": user.to_dict()}
         }
     
-    user_id = random.randint(1000000, 9999999) + 80000000
-    nickname = f"User{user_id}"
-    client_ip = get_client_real_ip(request)
-    ip_info = get_ip_info(client_ip)
-    is_check = 'Google' in ip_info.isp or 'Apple' in ip_info.isp
-    agent = request.headers.get("user-agent")
-    user = User(
-        user_id=user_id, 
-        device_id=device_id, 
-        app_id=package.id, 
-        ip=client_ip, 
-        country=ip_info.country, 
-        is_check=is_check, 
-        nickname=nickname,
-        agent=agent
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
+    user = _create_user(request, db, package.id, None)
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
