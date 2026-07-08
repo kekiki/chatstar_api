@@ -20,6 +20,8 @@ class Media(Base):
 
     def to_dict(self):
         return {
+            "id": self.id,
+            "user_id": self.user_id,
             "cover": self.cover,
             "url": self.url,
             "is_vip": self.is_vip,
