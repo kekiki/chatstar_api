@@ -215,8 +215,20 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/loginPassword")
-def login_password(data: PasswordLoginRequest, db: Session = Depends(get_db)):
+def login_password(request: Request, data: PasswordLoginRequest, db: Session = Depends(get_db)):
     """Login using user_id and password."""
+    device_id = request.headers.get("device-id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Missing device_id header")
+
+    package_name = request.headers.get("package-name")
+    if not package_name:
+        raise HTTPException(status_code=400, detail="Missing package_name header")
+
+    # package = db.query(AppList).filter(AppList.package_name == package_name).first()
+    # if not package:
+    #     raise HTTPException(status_code=400, detail="Invalid package_name")
+
     user = db.query(User).filter(User.user_id == data.user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
