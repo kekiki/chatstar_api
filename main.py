@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import PORT
+from app.config import HOST, PORT
 from app.database import Base, engine
 from app import models
 from app.routers import auth, users, web, orders, anchor

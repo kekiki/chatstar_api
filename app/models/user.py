@@ -25,10 +25,6 @@ class User(Base):
     vip_expire_time = Column(Integer)
     language_name = Column(String(64), default="English")
     language_code = Column(String(16), default="en")
-    follow_count = Column(Integer, default=0)
-    fans_count = Column(Integer, default=0)
-    like_count = Column(Integer, default=0)
-    is_check = Column(Boolean, default=False)
     agent = Column(String(255))
     birthday = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp() - 86400 * 365 * 25))
     # Install referrer tracking
@@ -53,9 +49,5 @@ class User(Base):
             "vip_expire_time": self.vip_expire_time,
             "language_name": self.language_name,
             "language_code": self.language_code,
-            "follow_count": self.follow_count,
-            "fans_count": self.fans_count,
-            "like_count": self.like_count,
-            "r_flag": self.is_check,
             "birthday": self.birthday,
             }

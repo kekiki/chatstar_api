@@ -5,7 +5,7 @@ Handles environment variables and settings.
 import os
 
 # ===================== 自动读取 Railway 环境变量 =====================
-HOST: str = os.getenv('HOST', '0.0.0.0')
+HOST: str = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get("PORT", '8000'))
 
 # 数据库路径

@@ -60,9 +60,9 @@ curl -X GET http://localhost:8080/api/user/info \
 cd ~/你的项目文件夹
 ```
 
-2. 创建名为 venv 的虚拟环境
+2. 创建名为 .venv 可访问全局包的虚拟环境
 ```bash
-python -m venv .venv
+python -m venv .venv --system-site-packages
 ```
 
 3.激活虚拟环境（Mac zsh）,激活成功后，终端前缀会出现 (venv) 标识。
