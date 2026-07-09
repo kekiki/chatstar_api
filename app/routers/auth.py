@@ -8,11 +8,17 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User, AppList, BlackWhiteUser, BlackWhiteIp, BlackWhiteDevice
-from app.security import create_token
+from app.security import create_token, get_hash, verify_password
 from app.schemas import GoogleUserInfo
 from app.ip_location import ip_location, IPLocation
+from pydantic import BaseModel
+import asyncio
 
 router = APIRouter(prefix="/api", tags=["auth"])
+
+class PasswordLoginRequest(BaseModel):
+    user_id: int
+    password: str
 
 def _get_client_real_ip(request: Request) -> str:
     """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
@@ -101,37 +107,43 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
 
     return False
 
-def _create_user(request: Request, db: Session, package_name: str, googleUser: GoogleUserInfo = None):
+async def _create_user(request: Request, db: Session, package_name: str, googleUser: GoogleUserInfo = None):
     """Create a new user in the database."""
     device_id = request.headers.get("device-id")
     agent = request.headers.get("user-agent")
     user_id = random.randint(1000000, 9999999) + 80000000
     client_ip = _get_client_real_ip(request)
-    ip_info = ip_location.get_ip_location(client_ip)
+    # ip_info = ip_location.get_ip_location(client_ip)
+    # czdb 查询是同步 IO，高并发场景放到线程池执行，避免阻塞事件循环
+    ip_info = await asyncio.to_thread(ip_location.get_ip_location, client_ip)
     is_check = _check_review_user(db, user_id, device_id, agent , ip_info)
     if googleUser:
         nickname = googleUser.nickname if googleUser.nickname else f"User{user_id}"
         google_id = googleUser.user_id
         email = googleUser.email
         avatar = googleUser.avatar
+        password = None
     else:
         nickname = f"User{user_id}"
         google_id = None
         email = None
         avatar = None
+        # Generate random 6-character password for guest users
+        password = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=6))
     
     user = User(
         user_id=user_id,
         device_id=device_id,
         package_name=package_name,
         ip=ip_info.ip,
-        country=ip_info.addr,
+        country=ip_info.country,
         is_check=is_check,
         nickname=nickname,
         google_id=google_id,
         email=email,
         avatar=avatar,
         agent=agent,
+        password=get_hash(password) if password else None,
     )
     db.add(user)
     db.commit()
@@ -163,7 +175,7 @@ def login_google(request: Request, data: GoogleUserInfo, db: Session = Depends(g
             "data": {"accessToken": token, "user": user.to_dict()}
         }
 
-    user = _create_user(request, db, package_name, data)
+    user = asyncio.run(_create_user(request, db, package_name, data))
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
@@ -194,7 +206,27 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
             "data": {"accessToken": token, "user": user.to_dict()}
         }
     
-    user = _create_user(request, db, package_name, None)
+    user = asyncio.run(_create_user(request, db, package_name, None))
+    token = create_token({"sub": str(user.user_id)})
+    return {
+        "code": 200,
+        "data": {"accessToken": token, "user": user.to_dict()}
+    }
+
+
+@router.post("/loginPassword")
+def login_password(data: PasswordLoginRequest, db: Session = Depends(get_db)):
+    """Login using user_id and password."""
+    user = db.query(User).filter(User.user_id == data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    if not user.password:
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    if not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,

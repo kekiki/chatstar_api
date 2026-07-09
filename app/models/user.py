@@ -39,6 +39,7 @@ class User(Base):
     install_begin_timestamp_server_seconds = Column(Integer)
     install_version = Column(String(64))
     google_play_instant = Column(Boolean, default=False)
+    password = Column(String(255))
 
     def to_dict(self):
         return {

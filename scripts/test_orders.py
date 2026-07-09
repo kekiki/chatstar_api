@@ -6,7 +6,7 @@ Set `BASE_URL` if your server is at a different host/port.
 import requests
 import time
 
-BASE_URL = "http://localhost:8080"
+BASE_URL = "http://localhost:8000"
 
 
 def create_order_example():

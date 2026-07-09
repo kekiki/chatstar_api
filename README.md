@@ -53,13 +53,6 @@ curl -X GET http://localhost:8080/api/user/info \
 - The old password login endpoint is currently commented out in `app/routers/auth.py`.
 - JWT authentication now uses bearer tokens via `Authorization: Bearer <token>`.
 
-授权有效期至2027年07月09日。
-IP地址查询李现数据库CZDB更新地址:
-https://www.cz88.net/api/communityIpAuthorization/communityIpDbFile?fn=czdb&key=d5c09f8a-a976-38cb-b5bb-4cb74bc37f22
-
-CZDB数据库密钥:
-X4r41fgcFMO5TiKPz+AmUA==
-
 
 ##在虚拟环境运行项目
 1.进入你的项目文件夹

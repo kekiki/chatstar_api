@@ -10,3 +10,4 @@ google-auth
 uvicorn[standard]
 qqwry-py3
 boto3
+# czdb-searcher
