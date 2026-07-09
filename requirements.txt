@@ -5,8 +5,8 @@ passlib
 sqlalchemy
 psycopg2-binary
 python-multipart
-python-dotenv
 requests
 google-auth
 uvicorn[standard]
 qqwry-py3
+boto3

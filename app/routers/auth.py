@@ -101,7 +101,7 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
 
     return False
 
-def _create_user(request: Request, db: Session, package_id: int, googleUser: GoogleUserInfo = None):
+def _create_user(request: Request, db: Session, package_name: str, googleUser: GoogleUserInfo = None):
     """Create a new user in the database."""
     device_id = request.headers.get("device-id")
     agent = request.headers.get("user-agent")
@@ -123,7 +123,7 @@ def _create_user(request: Request, db: Session, package_id: int, googleUser: Goo
     user = User(
         user_id=user_id,
         device_id=device_id,
-        app_id=package_id,
+        package_name=package_name,
         ip=ip_info.ip,
         country=ip_info.addr,
         is_check=is_check,
@@ -148,9 +148,9 @@ def login_google(request: Request, data: GoogleUserInfo, db: Session = Depends(g
     if not package_name:
         raise HTTPException(status_code=400, detail="Missing package_name header")
 
-    package = db.query(AppList).filter(AppList.package_name == package_name).first()
-    if not package:
-        raise HTTPException(status_code=400, detail="Invalid package_name")
+    # package = db.query(AppList).filter(AppList.package_name == package_name).first()
+    # if not package:
+    #     raise HTTPException(status_code=400, detail="Invalid package_name")
 
     user = db.query(User).filter(User.google_id == data.user_id).first()
     if not user and data.email:
@@ -163,7 +163,7 @@ def login_google(request: Request, data: GoogleUserInfo, db: Session = Depends(g
             "data": {"accessToken": token, "user": user.to_dict()}
         }
 
-    user = _create_user(request, db, package.id, data)
+    user = _create_user(request, db, package_name, data)
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,
@@ -182,9 +182,9 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
     if not package_name:
         raise HTTPException(status_code=400, detail="Missing package_name header")
 
-    package = db.query(AppList).filter(AppList.package_name == package_name).first()
-    if not package:
-        raise HTTPException(status_code=400, detail="Invalid package_name")
+    # package = db.query(AppList).filter(AppList.package_name == package_name).first()
+    # if not package:
+    #     raise HTTPException(status_code=400, detail="Invalid package_name")
 
     user = db.query(User).filter(User.device_id == device_id).first()
     if user:
@@ -194,7 +194,7 @@ def login_guest(request: Request, db: Session = Depends(get_db)):
             "data": {"accessToken": token, "user": user.to_dict()}
         }
     
-    user = _create_user(request, db, package.id, None)
+    user = _create_user(request, db, package_name, None)
     token = create_token({"sub": str(user.user_id)})
     return {
         "code": 200,

@@ -65,8 +65,9 @@ def get_anchors(
         # Query media for this anchor
         medias = db.query(Media).filter(Media.user_id == str(anchor.user_id)).all()
         anchor_dict["media_list"] = [media.to_dict() for media in medias]
-        anchor_dict["is_hot"] = anchor.fans_count > 10000  # Example logic for "hot" anchors
-        anchor_dict["is_new"] = (anchor.created_time is not None and (datetime.now(timezone.utc) - anchor.created_time).days <= 30)  # Example logic for "new" anchors
+        anchor_dict["is_hot"] = anchor.fans_count > 10000 
+        # anchor_dict["is_new"] = (anchor.created_time is not None and (datetime.now(timezone.utc) - anchor.created_time).days <= 30)
+        anchor_dict["is_new"] = True
         anchor_dict["online_status"] = 1 if anchor.is_check else 0
         
         # Check if user is following this anchor

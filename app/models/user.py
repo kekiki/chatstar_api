@@ -12,7 +12,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
     device_id = Column(String(100), index=True)
-    app_id = Column(Integer, default=0)
+    package_name = Column(String(64), index=True)
     created_time = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
     country = Column(String(64), default="US")
     ip = Column(String(64))
@@ -57,4 +57,4 @@ class User(Base):
             "like_count": self.like_count,
             "r_flag": self.is_check,
             "birthday": self.birthday,
-        }
+            }

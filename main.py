@@ -55,4 +55,4 @@ def home():
 # ===================== Run application =====================
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run("main:app", host=HOST, port=PORT, reload=True)
