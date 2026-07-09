@@ -2,7 +2,7 @@
 Anchor routes: list anchors with sorting, filtering, and pagination.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -10,10 +10,8 @@ from sqlalchemy import desc
 from typing import Optional, Literal
 
 from app.database import get_db
-from app.models.anchor import Anchor
-from app.models.media import Media
+from app.models import Anchor, Media, User, Follow
 from app.security import current_user
-from app.models import User
 
 router = APIRouter(prefix="/api", tags=["anchor"])
 
@@ -68,8 +66,16 @@ def get_anchors(
         medias = db.query(Media).filter(Media.user_id == str(anchor.user_id)).all()
         anchor_dict["media_list"] = [media.to_dict() for media in medias]
         anchor_dict["is_hot"] = anchor.fans_count > 10000  # Example logic for "hot" anchors
-        anchor_dict["is_new"] = (anchor.created_time is not None and (datetime.utcnow() - anchor.created_time).days <= 30)  # Example logic for "new" anchors
+        anchor_dict["is_new"] = (anchor.created_time is not None and (datetime.now(timezone.utc) - anchor.created_time).days <= 30)  # Example logic for "new" anchors
         anchor_dict["online_status"] = 1 if anchor.is_check else 0
+        
+        # Check if user is following this anchor
+        is_following = db.query(Follow).filter(
+            Follow.user_id == str(user.user_id),
+            Follow.follow_user_id == str(anchor.user_id),
+        ).first() is not None
+        anchor_dict["is_following"] = is_following
+        
         items.append(anchor_dict)
     
     return {
