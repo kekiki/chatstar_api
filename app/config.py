@@ -9,7 +9,7 @@ HOST: str = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get("PORT", '8000'))
 
 # 数据库路径
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./../chatstar_data.db")
+DATABASE_URL = "postgresql://postgres:EgPGPiAzOREUtFcKeysNawpgLkKXAEwW@acela.proxy.rlwy.net:57251/railway" #os.environ.get("DATABASE_URL", "sqlite:///./../chatstar_data.db")
 
 # JWT Settings
 SECRET_KEY = os.environ.get("SECRET_KEY", "default-secret-key")
