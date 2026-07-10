@@ -22,7 +22,7 @@ class IPLocation:
     def get_ip_location(self, ip):
         result = self.q.lookup(ip)
         if result is None:
-            return None
+            return IPLocationResult(ip, '', '')
         addr, isp = result
         return IPLocationResult(ip, addr, isp)
 

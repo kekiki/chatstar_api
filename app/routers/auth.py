@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User, AppList, BlackWhiteUser, BlackWhiteIp, BlackWhiteDevice, UserFollow, UserLike
+from app.models.app_review import AppReview
 from app.security import create_token, get_hash, verify_password, current_user
-from app.schemas import GoogleUserInfo
-from app.ip_location import ip_location, IPLocation
+from app.schemas import GoogleUserInfo, UserAgent
+from app.ip_location import ip_location, IPLocationResult
 from pydantic import BaseModel
 import asyncio
 
@@ -23,6 +24,9 @@ class PasswordLoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+
+class SetPasswordRequest(BaseModel):
+    password: str
 
 def _get_client_real_ip(request: Request) -> str:
     """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
@@ -46,7 +50,7 @@ def _get_client_real_ip(request: Request) -> str:
 
 # 谷歌用户注册国家为美国/印度/菲律宾&&设备为Pad/pixel/OnePlus/google属于审核人员，标记审核名单[账号类型/设备类型]
 # 苹果用户注册IP归属国家为[美国/爱尔兰/韩国/新加坡/以色列/印度/加拿大/澳大利亚]属于审核人员，标记审核名单[账号类型/IP类型]
-def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip_info: IPLocation = None):
+def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip_info: IPLocationResult):
 
     # 检查用户是否在审核名单中
     black_white_user = db.query(BlackWhiteUser).filter(BlackWhiteUser.user_id == str(user_id)).first()
@@ -63,53 +67,53 @@ def _check_review_user(db: Session, user_id: int, device_id: str, agent: str, ip
     if black_white_device and black_white_device.status == 0:
         return True
 
-    if ip_info:
-        isp = ip_info.isp.lower() if ip_info.isp else ""
+    is_review_user = False
+    if len(ip_info.country) == 0 and len(ip_info.isp) == 0:
+        is_review_user = True
+
+    if not is_review_user:
+        # 检查ip运营商
+        isp = ip_info.isp.lower()
         if 'google' in isp or 'apple' in isp:
-            # ip记录到审核名单
-            black_white_ip = BlackWhiteIp(
-                ip=ip_info.ip,
-                status=0,
-                remarks=f"用户{user_id}注册IP归属ISP为{isp}"
-            )
-            db.add(black_white_ip)
-            db.commit()
-            
-            # 用户记录到审核名单
-            black_white_user = BlackWhiteUser(
-                user_id=user_id,
-                status=0,
-                remarks=f"注册IP归属ISP为{isp}"
-            )
-            db.add(black_white_user)
-            db.commit()
-            return True
-        
-        # 检查设备类型
+            is_review_user = True
+    
+    if not is_review_user:
+        # 检查设备类型和国家
         agent_lower = agent.lower()
         is_device_check = 'pad' in agent_lower or 'tab' in agent_lower or 'pixel' in agent_lower or 'oneplus' in agent_lower or 'google' in agent_lower
         is_country_check = ip_info.country in ['美国', '印度', '菲律宾']
         if is_device_check and is_country_check:
-            # 设备记录到审核名单
-            black_white_device = BlackWhiteDevice(
-                device_id=device_id,
-                status=0,
-                remarks=f"用户{user_id}注册设备为[{agent}]，注册IP归属地为[{ip_info.addr}]"
-            )
-            db.add(black_white_device)
-            db.commit()
-            
-            # 用户记录到审核名单
-            black_white_user = BlackWhiteUser(
-                user_id=user_id,
-                status=0,
-                remarks=f"注册设备为[{agent}]，注册IP归属地为[{ip_info.addr}]"
-            )
-            db.add(black_white_user)
-            db.commit()
-            return True
+            is_review_user = True
 
-    return False
+    if is_review_user:
+        # ip记录到审核名单
+        black_white_ip = BlackWhiteIp(
+            ip=ip_info.ip,
+            status=0,
+            remarks=f"用户{user_id}注册IP归属ISP为{ip_info.isp}"
+        )
+
+        # 设备记录到审核名单
+        black_white_device = BlackWhiteDevice(
+            device_id=device_id,
+            status=0,
+            remarks=f"用户{user_id}注册IP国家为[{ip_info.country}],设备为[{agent}]"
+        )
+        
+        # 用户记录到审核名单
+        black_white_user = BlackWhiteUser(
+            user_id=user_id,
+            status=0,
+            remarks=f"注册IP国家为[{ip_info.country}],ISP为{ip_info.isp},设备为[{agent}]"
+        )
+
+        db.add(black_white_ip)
+        db.add(black_white_device)
+        db.add(black_white_user)
+        db.commit()
+        return True
+
+    return is_review_user
 
 async def _create_user(request: Request, db: Session, package_name: str, googleUser: GoogleUserInfo = None) -> dict:
     """Create a new user in the database."""
@@ -120,7 +124,6 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
     # ip_info = ip_location.get_ip_location(client_ip)
     # czdb 查询是同步 IO，高并发场景放到线程池执行，避免阻塞事件循环
     ip_info = await asyncio.to_thread(ip_location.get_ip_location, client_ip)
-    is_review = _check_review_user(db, user_id, device_id, agent , ip_info)
     if googleUser:
         nickname = googleUser.nickname if googleUser.nickname else f"User{user_id}"
         google_id = googleUser.user_id
@@ -136,7 +139,7 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
         user_id=user_id,
         device_id=device_id,
         package_name=package_name,
-        ip=ip_info.ip,
+        ip=client_ip,
         country=ip_info.country,
         nickname=nickname,
         google_id=google_id,
@@ -146,6 +149,12 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
     )
     db.add(user)
     db.commit()
+
+    is_review = _check_review_user(db, user_id, device_id, agent , ip_info)
+    agentModel = UserAgent(agent)
+    if not is_review:
+        is_review = db.query(AppReview).filter(AppReview.package_name == package_name, AppReview.app_version == agentModel.app_version).first() is not None
+
     user_dict = user.to_dict()
     user_dict["r_flag"] = is_review
 
@@ -169,6 +178,10 @@ async def _query_user(request: Request, db: Session, package_name: str, user: Us
     ip_info = await asyncio.to_thread(ip_location.get_ip_location, client_ip)
     is_review = _check_review_user(db, user.user_id, device_id, agent , ip_info)
     
+    agentModel = UserAgent(agent)
+    if not is_review:
+        is_review = db.query(AppReview).filter(AppReview.package_name == package_name, AppReview.app_version == agentModel.app_version).first() is not None
+
     user_dict = user.to_dict()
     user_dict["r_flag"] = is_review
 
@@ -297,4 +310,19 @@ def change_password(data: ChangePasswordRequest, user: User = Depends(current_us
     return {
         "code": 200,
         "data": {"message": "Password changed successfully"}
+    }
+
+
+@router.post("/setPassword")
+def set_password(data: SetPasswordRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Set user password for the first time."""
+    if user.password:
+        raise HTTPException(status_code=400, detail="Password already set. Use changePassword instead.")
+    
+    user.password = get_hash(data.password)
+    db.commit()
+    
+    return {
+        "code": 200,
+        "data": {"message": "Password set successfully"}
     }
