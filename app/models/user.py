@@ -21,7 +21,6 @@ class User(Base):
     email = Column(String(128), index=True)
     google_id = Column(String(128), index=True)
     balance = Column(Integer, default=0)
-    is_vip = Column(Boolean, default=False)
     vip_expire_time = Column(Integer)
     language_name = Column(String(64), default="English")
     language_code = Column(String(16), default="en")
@@ -40,6 +39,11 @@ class User(Base):
     install_version = Column(String(64))
     google_play_instant = Column(Boolean, default=False)
     password = Column(String(255))
+
+    @property
+    def is_vip(self):
+        now_ts = int(datetime.datetime.now().timestamp())
+        return self.vip_expire_time is not None and self.vip_expire_time > now_ts
 
     def to_dict(self):
         return {
