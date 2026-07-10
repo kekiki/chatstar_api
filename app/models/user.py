@@ -50,4 +50,5 @@ class User(Base):
             "language_name": self.language_name,
             "language_code": self.language_code,
             "birthday": self.birthday,
+            "has_password": self.password is not None
             }

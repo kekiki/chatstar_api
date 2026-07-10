@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User, AppList, BlackWhiteUser, BlackWhiteIp, BlackWhiteDevice, UserFollow, UserLike, Media
-from app.security import create_token, get_hash, verify_password
+from app.models import User, AppList, BlackWhiteUser, BlackWhiteIp, BlackWhiteDevice, UserFollow, UserLike
+from app.security import create_token, get_hash, verify_password, current_user
 from app.schemas import GoogleUserInfo
 from app.ip_location import ip_location, IPLocation
 from pydantic import BaseModel
@@ -19,6 +19,10 @@ router = APIRouter(prefix="/api", tags=["auth"])
 class PasswordLoginRequest(BaseModel):
     user_id: int
     password: str
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
 def _get_client_real_ip(request: Request) -> str:
     """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
@@ -122,14 +126,11 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
         google_id = googleUser.user_id
         email = googleUser.email
         avatar = googleUser.avatar
-        password = None
     else:
         nickname = f"User{user_id}"
         google_id = None
         email = None
         avatar = None
-        # Generate random 6-character password for guest users
-        password = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=6))
     
     user = User(
         user_id=user_id,
@@ -142,7 +143,6 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
         email=email,
         avatar=avatar,
         agent=agent,
-        password=get_hash(password) if password else None,
     )
     db.add(user)
     db.commit()
@@ -279,4 +279,22 @@ def login_password(request: Request, data: PasswordLoginRequest, db: Session = D
     return {
         "code": 200,
         "data": {"accessToken": token, "user": user_dict}
+    }
+
+
+@router.post("/changePassword")
+def change_password(data: ChangePasswordRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Change user password."""
+    if not user.password:
+        raise HTTPException(status_code=400, detail="Password not set for this user")
+    
+    if not verify_password(data.old_password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid old password")
+    
+    user.password = get_hash(data.new_password)
+    db.commit()
+    
+    return {
+        "code": 200,
+        "data": {"message": "Password changed successfully"}
     }
