@@ -27,6 +27,10 @@ class User(Base):
     language_code = Column(String(16), default="en")
     agent = Column(String(255))
     birthday = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp() - 86400 * 365 * 25))
+
+    # Review flag
+    is_review = Column(Boolean, default=False)
+
     # Install referrer tracking
     install_referrer = Column(String(255))
     referrer_click_timestamp_seconds = Column(Integer)
@@ -50,5 +54,6 @@ class User(Base):
             "language_name": self.language_name,
             "language_code": self.language_code,
             "birthday": self.birthday,
-            "has_password": self.password is not None
+            "has_password": self.password is not None,
+            "r_flag": self.is_review
             }

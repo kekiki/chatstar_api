@@ -16,7 +16,7 @@ class Anchor(Base):
     follow_count = Column(Integer, default=0)
     fans_count = Column(Integer, default=0)
     like_count = Column(Integer, default=0)
-    is_check = Column(Boolean, default=False)
+    is_review = Column(Boolean, default=False)
     
     def to_dict(self):
         return {

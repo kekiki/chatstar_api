@@ -124,6 +124,11 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
     # ip_info = ip_location.get_ip_location(client_ip)
     # czdb 查询是同步 IO，高并发场景放到线程池执行，避免阻塞事件循环
     ip_info = await asyncio.to_thread(ip_location.get_ip_location, client_ip)
+    is_review = _check_review_user(db, user_id, device_id, agent , ip_info)
+    agentModel = UserAgent(agent)
+    if not is_review:
+        is_review = db.query(AppReview).filter(AppReview.package_name == package_name, AppReview.app_version == agentModel.app_version).first() is not None
+
     if googleUser:
         nickname = googleUser.nickname if googleUser.nickname else f"User{user_id}"
         google_id = googleUser.user_id
@@ -146,19 +151,12 @@ async def _create_user(request: Request, db: Session, package_name: str, googleU
         email=email,
         avatar=avatar,
         agent=agent,
+        is_review=is_review
     )
     db.add(user)
     db.commit()
 
-    is_review = _check_review_user(db, user_id, device_id, agent , ip_info)
-    agentModel = UserAgent(agent)
-    if not is_review:
-        is_review = db.query(AppReview).filter(AppReview.package_name == package_name, AppReview.app_version == agentModel.app_version).first() is not None
-
     user_dict = user.to_dict()
-    user_dict["r_flag"] = is_review
-
-    # follow_count, fans_count, like_count
     follows = db.query(UserFollow).filter(UserFollow.user_id == str(user_id)).all()
     fans = db.query(UserFollow).filter(UserFollow.follow_user_id == str(user_id)).all()
     likes = db.query(UserLike).filter(UserLike.like_user_id == str(user_id)).all()
@@ -182,10 +180,10 @@ async def _query_user(request: Request, db: Session, package_name: str, user: Us
     if not is_review:
         is_review = db.query(AppReview).filter(AppReview.package_name == package_name, AppReview.app_version == agentModel.app_version).first() is not None
 
-    user_dict = user.to_dict()
-    user_dict["r_flag"] = is_review
+    user.is_review = is_review
+    db.commit()
 
-    # follow_count, fans_count, like_count
+    user_dict = user.to_dict()
     follows = db.query(UserFollow).filter(UserFollow.user_id == str(user.user_id)).all()
     fans = db.query(UserFollow).filter(UserFollow.follow_user_id == str(user.user_id)).all()
     likes = db.query(UserLike).filter(UserLike.like_user_id == str(user.user_id)).all()

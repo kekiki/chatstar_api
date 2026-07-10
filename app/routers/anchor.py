@@ -40,7 +40,7 @@ def get_anchors(
     
     # Apply filters
     if country:
-        query = query.filter(Anchor.country == country)
+        query = query.filter(Anchor.country == country, Anchor.is_review == str(user.is_review))
     
     if language_code:
         query = query.filter(Anchor.language_code == language_code)
@@ -66,7 +66,7 @@ def get_anchors(
         anchor_dict["is_hot"] = anchor.fans_count > 10000 
         # anchor_dict["is_new"] = (anchor.created_time is not None and (datetime.now(timezone.utc) - anchor.created_time).days <= 30)
         anchor_dict["is_new"] = True
-        anchor_dict["online_status"] = 1 if anchor.is_check else 0
+        anchor_dict["online_status"] = 1 if anchor.is_review else 0
         
         # Check if user is followed by this anchor
         is_followed = db.query(UserFollow).filter(
