@@ -11,3 +11,7 @@ uvicorn[standard]
 qqwry-py3
 boto3
 # czdb-searcher
+asyncpg       # async Postgres driver for Neon
+aiosqlite      # async SQLite driver for local development
+botocore
+python-dotenv

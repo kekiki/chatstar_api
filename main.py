@@ -4,27 +4,23 @@ Main application factory and configuration.
 """
 import os
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.config import HOST, PORT
-from app.database import Base, engine
 from app import models
-from app.routers import auth, users, web, orders, anchor
+from app.config import HOST, PORT
+from app.database import init_db_tables
+from app.routers import anchor, auth, orders, users, web
 
 
-# ===================== Create database tables =====================
-Base.metadata.create_all(bind=engine)
-
-# ===================== Application factory =====================
 app = FastAPI(
     title="ChatStar API",
     description="Chat and user management service",
-    version="1.0.0"
+    version="1.0.0",
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 生产替换为你的前端域名
+    allow_origins=["*"],  # 生产替换为你的前端域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,18 +37,24 @@ app.include_router(web.router)
 app.include_router(orders.router)
 app.include_router(anchor.router)
 
+@app.on_event("startup")
+async def startup():
+    """Initialize database tables on startup."""
+    await init_db_tables()
+
 # ===================== Health check endpoint =====================
 @app.get("/")
-def home():
+async def home():
     """Health check endpoint."""
     return {
         "status": "ok",
         "service": "chatstar-api",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
 # ===================== Run application =====================
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host=HOST, port=PORT, reload=True)

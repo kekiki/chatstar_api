@@ -2,30 +2,32 @@
 Order routes: create order, query by orderNo, query by userId, verify Google purchase.
 """
 
-from typing import List, Optional
+import logging
+import os
 import time
 import uuid
-import os
-import logging
+from typing import List, Optional
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, get_db_readonly
 from app.models import Order, User
 from app.schemas.order_request import CreateOrderRequest, VerifyGoogleRequest
-from app.security import current_user
+from app.security import current_user, current_user_readonly
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
 
 
 @router.post("/order/create")
-def create_order(data: CreateOrderRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+async def create_order(data: CreateOrderRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Create a new order record."""
     order_no = data.order_no or f"local-{int(time.time())}-{uuid.uuid4().hex[:8]}"
-    existing = db.query(Order).filter(Order.order_no == order_no).first()
+    existing_result = await db.execute(select(Order).where(Order.order_no == order_no))
+    existing = existing_result.scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=400, detail="order_no already exists")
 
@@ -40,29 +42,29 @@ def create_order(data: CreateOrderRequest, user: User = Depends(current_user), d
         call_card_num=data.call_card_num,
         match_card_num=data.match_card_num,
         chat_card_num=data.chat_card_num,
-        created_at=int(time.time())
+        created_at=int(time.time()),
     )
     db.add(order)
-    db.commit()
-
     return {"code": 200, "data": order.to_dict()}
 
 
 @router.get("/order/{order_no}")
-def get_order(order_no: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+async def get_order(order_no: str, user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly)):
     """Get an order by its order_no."""
-    order = db.query(Order).filter(Order.order_no == order_no, Order.user_id == user.user_id).first()
+    result = await db.execute(select(Order).where(Order.order_no == order_no, Order.user_id == user.user_id))
+    order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return {"code": 200, "data": order.to_dict()}
 
 
 @router.get("/orders/user/{user_id}")
-def get_orders_by_user(user_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+async def get_orders_by_user(user_id: int, user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly)):
     """Get all orders for a given user_id."""
     if user_id != user.user_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    rows: List[Order] = db.query(Order).filter(Order.user_id == user_id).order_by(Order.id.desc()).all()
+    result = await db.execute(select(Order).where(Order.user_id == user_id).order_by(Order.id.desc()))
+    rows: List[Order] = result.scalars().all()
     items = [r.to_dict() for r in rows]
     return {"code": 200, "data": items}
 
@@ -81,7 +83,6 @@ def _get_google_access_token() -> Optional[str]:
     global _cached_token, _cached_token_expiry
 
     now = time.time()
-    # return cached token if valid
     if _cached_token and now + 60 < _cached_token_expiry:
         return _cached_token
 
@@ -101,7 +102,6 @@ def _get_google_access_token() -> Optional[str]:
             creds.refresh(GoogleRequest())
             token = creds.token
             expiry_ts = creds.expiry.timestamp() if getattr(creds, "expiry", None) else now + 3600
-            # cache token a bit earlier than expiry
             _cached_token = token
             _cached_token_expiry = expiry_ts
             return token
@@ -109,7 +109,6 @@ def _get_google_access_token() -> Optional[str]:
             logger.exception("failed to obtain service account token: %s", e)
             raise RuntimeError("failed to obtain service account token")
 
-    # fallback to env var
     token = os.environ.get("GOOGLE_ACCESS_TOKEN")
     if token:
         return token
@@ -149,7 +148,7 @@ def _verify_google_purchase_with_api(package_name: str, product_id: str, token: 
 
 
 @router.post("/order/verifyGoogle")
-def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: Session = Depends(get_db)):
+async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Verify a Google Play in-app purchase and update order status.
 
     Expects `GOOGLE_ACCESS_TOKEN` env var to be set with a valid OAuth2 token.
@@ -159,16 +158,15 @@ def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    # Example: response contains `purchaseState` (0 = purchased)
     purchase_state = result.get("purchaseState")
 
-    order = db.query(Order).filter(Order.order_no == data.order_no, Order.user_id == user.user_id).first()
+    result_order = await db.execute(select(Order).where(Order.order_no == data.order_no, Order.user_id == user.user_id))
+    order = result_order.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
     if purchase_state == 0:
-        order.order_status = 1  # mark paid
+        order.order_status = 1
         db.add(order)
-        db.commit()
 
     return {"code": 200, "data": {"verified": purchase_state == 0, "google": result}}

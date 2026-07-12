@@ -2,14 +2,16 @@
 JWT and password authentication utilities.
 """
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, HTTPException, Header
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from fastapi import Depends, Header, HTTPException
+from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ALGORITHM, SECRET_KEY, TOKEN_EXPIRE_DAYS
-from app.database import get_db
+from app.database import get_db, get_db_readonly
 from app.models import User
 
 # ===================== JWT 认证 =====================
@@ -35,30 +37,59 @@ def create_token(data: dict) -> str:
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def current_user(
+async def current_user(
     authorization: str = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     """Get current authenticated user from token."""
     if not authorization:
         raise HTTPException(401, "Missing Authorization header")
-    
-    # Support both "Bearer <token>" and "<token>" formats
+
     if authorization.startswith("Bearer "):
-        token_str = authorization[7:]  # Remove "Bearer " prefix
+        token_str = authorization[7:]
     else:
-        token_str = authorization  # Use the whole header as token
-    
+        token_str = authorization
+
     try:
         payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(401, "Invalid authorization")
 
-        user = db.query(User).filter(User.user_id == int(user_id)).first()
+        result = await db.execute(select(User).where(User.user_id == int(user_id)))
+        user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(401, "User not found")
-        
+
+        return user
+    except JWTError as e:
+        raise HTTPException(401, f"Invalid token: {str(e)}")
+
+
+async def current_user_readonly(
+    authorization: str = Header(None, alias="Authorization"),
+    db: AsyncSession = Depends(get_db_readonly),
+) -> User:
+    """Get current authenticated user from token using a read-only session."""
+    if not authorization:
+        raise HTTPException(401, "Missing Authorization header")
+
+    if authorization.startswith("Bearer "):
+        token_str = authorization[7:]
+    else:
+        token_str = authorization
+
+    try:
+        payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(401, "Invalid authorization")
+
+        result = await db.execute(select(User).where(User.user_id == int(user_id)))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(401, "User not found")
+
         return user
     except JWTError as e:
         raise HTTPException(401, f"Invalid token: {str(e)}")
