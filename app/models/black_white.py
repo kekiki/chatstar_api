@@ -4,7 +4,12 @@ BlackWhite database model.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from app.database import Base
 import datetime
+from enum import IntEnum
 
+class BlackWhiteStatus(IntEnum):
+    REVIEW = 0
+    BLACK = 1
+    WHITE = 2
 
 class BlackWhiteUser(Base):
     """BlackWhiteUser model for SQLAlchemy ORM."""
