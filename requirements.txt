@@ -12,5 +12,7 @@ qqwry-py3
 boto3
 # czdb-searcher
 asyncpg       # 异步Postgres，适配Neon
+httpx
 botocore
 python-dotenv
+greenlet
