@@ -3,6 +3,7 @@ FastAPI application entry point.
 Main application factory and configuration.
 """
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,10 +14,17 @@ from app.database import init_db_tables
 from app.routers import anchor, auth, orders, users, web
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database tables on startup."""
+    await init_db_tables()
+    yield
+
 app = FastAPI(
     title="ChatStar API",
     description="Chat and user management service",
     version="1.0.0",
+    lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
@@ -36,11 +44,6 @@ app.include_router(users.router)
 app.include_router(web.router)
 app.include_router(orders.router)
 app.include_router(anchor.router)
-
-@app.on_event("startup")
-async def startup():
-    """Initialize database tables on startup."""
-    await init_db_tables()
 
 # ===================== Health check endpoint =====================
 @app.get("/")
