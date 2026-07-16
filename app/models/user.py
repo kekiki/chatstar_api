@@ -1,6 +1,7 @@
 """
 User database model.
 """
+from functools import total_ordering
 from sqlalchemy import Column, Integer, String, Boolean
 from app.database import Base
 import datetime
@@ -39,6 +40,7 @@ class User(Base):
     install_version = Column(String(64))
     google_play_instant = Column(Boolean, default=False)
     password = Column(String(255))
+    total = Column(Integer, default=0) # 累计充值钻石数量
 
     @property
     def is_vip(self):
@@ -59,5 +61,6 @@ class User(Base):
             "language_code": self.language_code,
             "birthday": self.birthday,
             "has_password": self.password is not None,
-            "r_flag": self.is_review
+            "r_flag": self.is_review,
+            "total": self.total
             }
