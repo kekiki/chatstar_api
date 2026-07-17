@@ -11,7 +11,7 @@ class Media(Base):
     __tablename__ = "app_medias"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
+    user_id = Column(Integer, index=True)
     cover = Column(String, default="")
     url = Column(String, default="")
     is_vip = Column(Boolean, default=False)

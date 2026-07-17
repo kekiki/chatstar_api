@@ -62,7 +62,7 @@ async def get_anchors(
     items = []
     for anchor in anchors:
         anchor_dict = anchor.to_dict()
-        media_result = await db.execute(select(Media).where(Media.user_id == str(anchor.user_id)))
+        media_result = await db.execute(select(Media).where(Media.user_id == anchor.user_id))
         medias = media_result.scalars().all()
         anchor_dict["media_list"] = [media.to_dict() for media in medias]
         anchor_dict["is_hot"] = anchor.fans_count > 10000
