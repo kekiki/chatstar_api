@@ -10,7 +10,7 @@ class Order(Base):
     __tablename__ = "pay_orders"
     
     id = Column(Integer, primary_key=True, index=True)
-    app_id = Column(Integer, index=True)
+    package_name = Column(String(100), index=True)
     user_id = Column(Integer, index=True)
     order_no = Column(String, index=True)
     created_time = Column(Integer)

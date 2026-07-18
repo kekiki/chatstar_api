@@ -9,17 +9,30 @@ import uuid
 from typing import List, Optional
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_db_readonly
-from app.models import Order, User
+from app.models import Order, User, Product
 from app.schemas.order_request import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
+
+
+@router.get("/products")
+async def get_products(request: Request, db: AsyncSession = Depends(get_db_readonly)):
+    """Get product list filtered by package_name from request header."""
+    package_name = request.headers.get("package-name")
+    if not package_name:
+        raise HTTPException(status_code=400, detail="Missing package-name header")
+    
+    result = await db.execute(select(Product).where(Product.package_name == package_name))
+    products = result.scalars().all()
+    items = [product.to_dict() for product in products]
+    return {"code": 200, "data": items}
 
 
 @router.post("/order/create")
