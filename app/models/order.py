@@ -12,8 +12,10 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     package_name = Column(String(100), index=True)
     user_id = Column(Integer, index=True)
+    transaction_no = Column(String, index=True)
     order_no = Column(String, index=True)
     created_time = Column(Integer)
+    updated_time = Column(Integer)
     sku = Column(String)
     discount_type = Column(Integer, default=0)# 0普通折扣 1首充折扣
     order_status = Column(Integer, default=0)# 0待支付 1支付成功 2支付失败
@@ -24,6 +26,7 @@ class Order(Base):
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "transaction_no": self.transaction_no,
             "order_no": self.order_no,
             "created_time": self.created_time,
             "sku": self.sku,
