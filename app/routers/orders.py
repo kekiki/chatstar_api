@@ -160,7 +160,7 @@ def _verify_google_purchase_with_api(package_name: str, product_id: str, token: 
         raise RuntimeError("failed to parse Google response")
 
 
-@router.post("/order/verifyGoogle")
+@router.post("/order/verifyGoogleOrder")
 async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Verify a Google Play in-app purchase and update order status.
 
