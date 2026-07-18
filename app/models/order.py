@@ -12,6 +12,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     package_name = Column(String(100), index=True)
     user_id = Column(Integer, index=True)
+    anchor_id = Column(Integer, index=True)
     transaction_no = Column(String, index=True)
     order_no = Column(String, index=True)
     created_time = Column(Integer)
@@ -21,6 +22,10 @@ class Order(Base):
     order_status = Column(Integer, default=0)# 0待支付 1支付成功 2支付失败
     currency_code = Column(String, default="USD")
     currency_price = Column(Integer, default=0)
+    pp_id = Column(Integer, default=0)
+    pp_type = Column(String, default="")
+    path = Column(String, default="")
+    agent = Column(String, default="")
 
     def to_dict(self):
         return {
