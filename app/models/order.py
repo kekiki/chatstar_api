@@ -15,17 +15,17 @@ class Order(Base):
     anchor_id = Column(Integer, index=True)
     transaction_no = Column(String, index=True)
     order_no = Column(String, index=True)
-    created_time = Column(Integer)
-    updated_time = Column(Integer)
-    sku = Column(String)
-    discount_type = Column(Integer, default=0)# 0普通折扣 1首充折扣
-    order_status = Column(Integer, default=0)# 0待支付 1支付成功 2支付失败
+    created_time = Column(Integer, index=True)
+    updated_time = Column(Integer, index=True)
+    sku = Column(String, index=True)
+    discount_type = Column(Integer, default=0, index=True)# 0普通折扣 1首充折扣
+    order_status = Column(Integer, default=0, index=True)# 0待支付 1支付成功 2支付失败
     currency_code = Column(String, default="USD")
     currency_price = Column(Integer, default=0)
-    pp_id = Column(Integer, default=0)
-    pp_type = Column(String, default="")
-    path = Column(String, default="")
-    agent = Column(String, default="")
+    pp_id = Column(Integer, default=0, index=True)
+    pp_type = Column(String, default="", index=True)
+    path = Column(String, default="", index=True)
+    agent = Column(String, default="", index=True)
 
     def to_dict(self):
         return {
