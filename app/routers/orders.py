@@ -43,20 +43,20 @@ async def create_order(request: Request, data: CreateOrderRequest, user: User = 
         raise HTTPException(status_code=400, detail="Missing package_name header")
     
     now = datetime.now()
-    transcation_no = f"cs-{now.year}-{now.month}-{now.day}-{now.minute}-{now.second}-{now.microsecond}"
+    transaction_no = f"cs-{now.year}-{now.month}-{now.day}-{now.minute}-{now.second}-{now.microsecond}"
     agent = request.headers.get("user-agent")
 
     order = Order(
         package_name=package_name,
         user_id=user.user_id,
-        transcation_no=transcation_no,
+        transaction_no=transaction_no,
         sku=data.sku,
         pp_id=data.pp_id,
         anchor_id=data.anchor_id,
         path=data.path,
         order_status=0,
         agent=agent,
-        created_at=int(time.time()),
+        created_time=int(time.time()),
     )
     db.add(order)
     return {"code": 200, "data": order.to_dict()}
