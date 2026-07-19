@@ -30,7 +30,6 @@ class Order(Base):
     def to_dict(self):
         return {
             "id": self.id,
-            "user_id": self.user_id,
             "transaction_no": self.transaction_no,
             "created_time": self.created_time,
             "sku": self.sku,
