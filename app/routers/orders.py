@@ -4,8 +4,8 @@ Order routes: create order, query by orderNo, query by userId, verify Google pur
 
 import logging
 import os
+from datetime import datetime
 import time
-import uuid
 from typing import List, Optional
 
 import requests
@@ -36,25 +36,24 @@ async def get_products(request: Request, db: AsyncSession = Depends(get_db_reado
 
 
 @router.post("/order/create")
-async def create_order(data: CreateOrderRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def create_order(request: Request, data: CreateOrderRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Create a new order record."""
-    order_no = data.order_no or f"local-{int(time.time())}-{uuid.uuid4().hex[:8]}"
-    existing_result = await db.execute(select(Order).where(Order.order_no == order_no))
-    existing = existing_result.scalar_one_or_none()
-    if existing:
-        raise HTTPException(status_code=400, detail="order_no already exists")
+    package_name = request.headers.get("package-name")
+    if not package_name:
+        raise HTTPException(status_code=400, detail="Missing package_name header")
+    
+    now = datetime.now()
+    transcation_no = f"cs-{now.year}-{now.month}-{now.day}-{now.minute}-{now.second}-{now.microsecond}"
+    agent = request.headers.get("user-agent")
 
     order = Order(
+        package_name=package_name,
         user_id=user.user_id,
-        order_no=order_no,
-        product_id=data.product_id,
-        product_type=data.product_type,
-        currency_code=data.currency_code,
-        currency_price=data.currency_price,
-        vip_days=data.vip_days,
-        call_card_num=data.call_card_num,
-        match_card_num=data.match_card_num,
-        chat_card_num=data.chat_card_num,
+        transcation_no=transcation_no,
+        sku=data.sku,
+        path=data.path,
+        order_status=0,
+        agent=agent,
         created_at=int(time.time()),
     )
     db.add(order)
@@ -160,7 +159,7 @@ def _verify_google_purchase_with_api(package_name: str, product_id: str, token: 
         raise RuntimeError("failed to parse Google response")
 
 
-@router.post("/order/verifyGoogleOrder")
+@router.post("/order/verify")
 async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Verify a Google Play in-app purchase and update order status.
 

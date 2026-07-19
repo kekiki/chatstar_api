@@ -3,13 +3,8 @@ from typing import Optional
 
 
 class CreateOrderRequest(BaseModel):
-    user_id: int
-    order_no: Optional[str] = None
     sku: str
-    discount_type: int = 0
-    currency_code: str = "USD"
-    currency_price: int = 0
-
+    path: Optional[str] = None
 
 class VerifyGoogleRequest(BaseModel):
     order_no: str

@@ -22,7 +22,7 @@ class Order(Base):
     order_status = Column(Integer, default=0, index=True)# 0待支付 1支付成功 2支付失败
     currency_code = Column(String, default="USD")
     currency_price = Column(Integer, default=0)
-    pp_id = Column(Integer, default=0, index=True)
+    pp_id = Column(Integer, default=0, index=True) #0 Google
     pp_type = Column(String, default="", index=True)
     path = Column(String, default="", index=True)
     agent = Column(String, default="", index=True)
@@ -32,7 +32,6 @@ class Order(Base):
             "id": self.id,
             "user_id": self.user_id,
             "transaction_no": self.transaction_no,
-            "order_no": self.order_no,
             "created_time": self.created_time,
             "sku": self.sku,
             "discount_type": self.discount_type,
