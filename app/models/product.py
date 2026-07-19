@@ -32,6 +32,7 @@ class Product(Base):
             "currency_price": self.currency_price,
             "vip_days": self.vip_days,
             "diamonds": self.diamonds,
+            "reward_diamonds": self.reward_diamonds,
             "call_card_num": self.call_card_num,
             "match_card_num": self.match_card_num,
             "chat_card_num": self.chat_card_num,

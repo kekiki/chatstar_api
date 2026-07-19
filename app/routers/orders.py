@@ -29,7 +29,7 @@ async def get_products(request: Request, db: AsyncSession = Depends(get_db_reado
     if not package_name:
         raise HTTPException(status_code=400, detail="Missing package-name header")
     
-    result = await db.execute(select(Product).where(Product.package_name == package_name))
+    result = await db.execute(select(Product).where(Product.package_name == package_name).order_by(Product.diamonds))
     products = result.scalars().all()
     items = [product.to_dict() for product in products]
     return {"code": 200, "data": items}
