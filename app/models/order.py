@@ -22,7 +22,7 @@ class Order(Base):
     order_status = Column(Integer, default=0, index=True)# 0待支付 1支付成功 2支付失败
     currency_code = Column(String, default="USD")
     currency_price = Column(Integer, default=0)
-    pp_id = Column(Integer, default=0, index=True) #0 Google
+    pp_id = Column(Integer, default=1, index=True) #1 Google
     pp_type = Column(String, default="", index=True)
     path = Column(String, default="", index=True)
     agent = Column(String, default="", index=True)
