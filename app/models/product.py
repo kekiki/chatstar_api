@@ -11,7 +11,7 @@ class Product(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     package_name = Column(String(100), index=True)
-    sku = Column(String, unique=True)
+    sku = Column(String, index=True)
     diamonds = Column(Integer, default=0)
     vip_days = Column(Integer, default=0)
     reward_diamonds = Column(Integer, default=0)
