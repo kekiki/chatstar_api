@@ -51,6 +51,7 @@ async def create_order(request: Request, data: CreateOrderRequest, user: User = 
         user_id=user.user_id,
         transaction_no=transaction_no,
         sku=data.sku,
+        type=data.type,
         pp_id=data.pp_id,
         anchor_id=data.anchor_id,
         path=data.path,

@@ -4,6 +4,7 @@ from typing import Optional
 
 class CreateOrderRequest(BaseModel):
     sku: str
+    type: int
     path: Optional[str] = None
     pp_id: Optional[int] = 1
     anchor_id: Optional[int] = None
