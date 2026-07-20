@@ -15,7 +15,7 @@ class Product(Base):
     diamonds = Column(Integer, default=0)
     vip_days = Column(Integer, default=0)
     reward_diamonds = Column(Integer, default=0)
-    discount_type = Column(Integer, default=0) # 0:普通商品折扣，1:首充折扣
+    type = Column(Integer, default=0) # 0:普通商品折扣，1:首充折扣
     discount = Column(Integer, default=100) # 折扣, 如75代表七五折
     currency_code = Column(String, default="USD")
     currency_price = Column(Double, default=0)
@@ -26,7 +26,7 @@ class Product(Base):
     def to_dict(self):
         return {
             "sku": self.sku,
-            "discount_type": self.discount_type,
+            "type": self.type,
             "discount": self.discount,
             "currency_code": self.currency_code,
             "currency_price": self.currency_price,

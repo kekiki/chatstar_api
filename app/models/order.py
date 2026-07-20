@@ -18,7 +18,7 @@ class Order(Base):
     created_time = Column(Integer, index=True)
     updated_time = Column(Integer, index=True)
     sku = Column(String, index=True)
-    discount_type = Column(Integer, default=0, index=True)# 0普通折扣 1首充折扣
+    type = Column(Integer, default=0, index=True)# 0普通折扣 1首充折扣
     order_status = Column(Integer, default=0, index=True)# 0待支付 1支付成功 2支付失败
     currency_code = Column(String, default="USD")
     currency_price = Column(Integer, default=0)
@@ -33,7 +33,7 @@ class Order(Base):
             "transaction_no": self.transaction_no,
             "created_time": self.created_time,
             "sku": self.sku,
-            "discount_type": self.discount_type,
+            "type": self.type,
             "order_status": self.order_status,
             "currency_code": self.currency_code,
             "currency_price": self.currency_price,
