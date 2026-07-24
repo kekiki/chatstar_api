@@ -117,6 +117,12 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
     user_id = random.randint(1000000, 9999999) + 80000000
     client_ip = _get_client_real_ip(request)
     ip_info = await asyncio.to_thread(ip_location.get_ip_location, client_ip)
+    
+    # Check if package_name exists in app_list
+    result = await db.execute(select(AppList).where(AppList.package_name == package_name))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Invalid package_name")
+    
     is_review = await _check_review_user(db, user_id, device_id, agent, ip_info)
 
     agent_model = UserAgent(agent)
