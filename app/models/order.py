@@ -18,7 +18,7 @@ class Order(Base):
     created_time = Column(Integer, index=True)
     updated_time = Column(Integer, index=True)
     sku = Column(String, index=True)
-    type = Column(Integer, default=0, index=True)# 0普通折扣 1首充折扣
+    type = Column(Integer, default=0, index=True)# 0钻石 1首充 2VIP
     order_status = Column(Integer, default=0, index=True)# 0待支付 1支付成功 2支付失败
     currency_code = Column(String, default="USD")
     currency_price = Column(Integer, default=0)
