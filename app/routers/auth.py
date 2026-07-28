@@ -25,9 +25,9 @@ class PasswordLoginRequest(BaseModel):
     password: str
 
 
-class ChangePasswordRequest(BaseModel):
-    old_password: str
-    new_password: str
+class DeleteAccountWithAccountPasswordRequest(BaseModel):
+    user_id: int
+    password: str
 
 
 class SetPasswordRequest(BaseModel):
@@ -279,27 +279,27 @@ async def login_password(request: Request, data: PasswordLoginRequest, db: Async
     token = create_token({"sub": str(user.user_id)})
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
-
-@router.post("/changePassword")
-async def change_password(data: ChangePasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Change user password."""
-    if not user.password:
-        raise HTTPException(status_code=400, detail="Password not set for this user")
-
-    if not verify_password(data.old_password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid old password")
-
-    user.password = get_hash(data.new_password)
-
-    return {"code": 200, "data": {"message": "Password changed successfully"}}
-
-
 @router.post("/setPassword")
 async def set_password(data: SetPasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Set user password for the first time."""
-    if user.password:
-        raise HTTPException(status_code=400, detail="Password already set. Use changePassword instead.")
-
+    """Set user password"""
     user.password = get_hash(data.password)
-
     return {"code": 200, "data": {"message": "Password set successfully"}}
+
+@router.post("/deleteAccount")
+async def delete_account(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Delete the current user's account."""
+    await db.delete(user)
+    return {"code": 200, "data": {"message": "Account deleted successfully"}}
+
+@router.post("/deleteAccountWithAccountPassword")
+async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Delete the current user's account with account password."""
+    user = await db.get(User, data.user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    if not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    await db.delete(user)
+    return {"code": 200, "data": {"message": "Account deleted successfully"}}
