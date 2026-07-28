@@ -24,16 +24,6 @@ class PasswordLoginRequest(BaseModel):
     user_id: int
     password: str
 
-
-class DeleteAccountWithAccountPasswordRequest(BaseModel):
-    user_id: int
-    password: str
-
-
-class SetPasswordRequest(BaseModel):
-    password: str
-
-
 def _get_client_real_ip(request: Request) -> str:
     """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
     cf_ip = request.headers.get("cf-connecting-ip")
@@ -278,28 +268,3 @@ async def login_password(request: Request, data: PasswordLoginRequest, db: Async
     user_dict = await _query_user(request, db, package_name, user)
     token = create_token({"sub": str(user.user_id)})
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
-
-@router.post("/setPassword")
-async def set_password(data: SetPasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Set user password"""
-    user.password = get_hash(data.password)
-    return {"code": 200, "data": {"message": "Password set successfully"}}
-
-@router.post("/deleteAccount")
-async def delete_account(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Delete the current user's account."""
-    await db.delete(user)
-    return {"code": 200, "data": {"message": "Account deleted successfully"}}
-
-@router.post("/deleteAccountWithAccountPassword")
-async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
-    """Delete the current user's account with account password."""
-    user = await db.get(User, data.user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    
-    if not verify_password(data.password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid password")
-    
-    await db.delete(user)
-    return {"code": 200, "data": {"message": "Account deleted successfully"}}
