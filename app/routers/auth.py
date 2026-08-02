@@ -11,6 +11,24 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+MALE_NICKNAMES = [
+    "James", "Robert", "John", "Michael", "David", "William", "Richard", "Joseph",
+    "Thomas", "Christopher", "Charles", "Daniel", "Matthew", "Anthony", "Mark",
+    "Donald", "Steven", "Paul", "Andrew", "Joshua", "Kenneth", "Kevin", "Brian",
+    "George", "Timothy", "Ronald", "Edward", "Jason", "Jeffrey", "Ryan", "Jacob",
+    "Gary", "Nicholas", "Eric", "Jonathan", "Stephen", "Larry", "Justin", "Scott",
+    "Brandon", "Benjamin", "Samuel", "Raymond", "Gregory", "Frank", "Alexander",
+    "Patrick", "Jack", "Dennis", "Jerry", "Tyler", "Aaron", "Nathan", "Henry",
+    "Peter", "Adam", "Douglas", "Zachary", "Harold", "Carl", "Arthur", "Gerald",
+    "Roger", "Keith", "Jeremy", "Terry", "Lawrence", "Sean", "Christian", "Albert",
+    "Joe", "Ethan", "Austin", "Jesse", "Willie", "Billy", "Bryan", "Bruce",
+    "Jordan", "Ralph", "Roy", "Noah", "Dylan", "Eugene", "Wayne", "Alan",
+    "Juan", "Louis", "Russell", "Vincent", "Philip", "Bobby", "Johnny", "Bradley",
+]
+
+def _random_male_nickname() -> str:
+    return random.choice(MALE_NICKNAMES)
+
 from app.database import get_db
 from app.ip_location import IPLocationResult, ip_location
 from app.models import AppList, AppReview, BlackWhiteDevice, BlackWhiteIp, BlackWhiteUser, User, UserFollow, UserLike
@@ -126,12 +144,12 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
         is_review = result.scalar_one_or_none() is not None
 
     if google_user:
-        nickname = google_user.nickname if google_user.nickname else f"User{user_id}"
+        nickname = google_user.nickname if google_user.nickname else _random_male_nickname()
         google_id = google_user.user_id
         email = google_user.email
         avatar = google_user.avatar
     else:
-        nickname = f"User{user_id}"
+        nickname = _random_male_nickname()
         google_id = None
         email = None
         avatar = None
