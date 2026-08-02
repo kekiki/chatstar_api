@@ -8,7 +8,7 @@ from datetime import datetime
 import time
 from typing import List, Optional
 
-import requests
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,15 @@ from app.security import current_user, current_user_readonly
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
+
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+async def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=10.0)
+    return _http_client
 
 
 @router.get("/products")
@@ -130,11 +139,7 @@ def _get_google_access_token() -> Optional[str]:
     return None
 
 
-def _verify_google_purchase_with_api(package_name: str, product_id: str, token: str) -> dict:
-    """Verify Google Play in-app product purchase using Android Publisher API.
-
-    Uses `_get_google_access_token()` to obtain a Bearer token.
-    """
+async def _verify_google_purchase_with_api(package_name: str, product_id: str, token: str) -> dict:
     access_token = _get_google_access_token()
     if not access_token:
         logger.error("Google verification not configured: no token available")
@@ -146,7 +151,8 @@ def _verify_google_purchase_with_api(package_name: str, product_id: str, token: 
     )
     headers = {"Authorization": f"Bearer {access_token}"}
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        client = await _get_http_client()
+        resp = await client.get(url, headers=headers)
     except Exception as e:
         logger.exception("HTTP request to Google failed: %s", e)
         raise RuntimeError("HTTP request to Google failed")
@@ -169,7 +175,7 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
     Expects `GOOGLE_ACCESS_TOKEN` env var to be set with a valid OAuth2 token.
     """
     try:
-        result = _verify_google_purchase_with_api(data.package_name, data.product_id, data.purchase_token)
+        result = await _verify_google_purchase_with_api(data.package_name, data.product_id, data.purchase_token)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 

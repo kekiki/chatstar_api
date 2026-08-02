@@ -41,12 +41,13 @@ ASYNC_DATABASE_URL, ASYNC_CONNECT_ARGS = build_async_engine_url(DATABASE_URL)
 
 engine_kwargs = {
     "echo": False,
+    "pool_pre_ping": True,
 }
 if DATABASE_URL.startswith(("postgresql://", "postgres://")):
     engine_kwargs.update(
         {
-            "pool_size": 3,
-            "max_overflow": 8,
+            "pool_size": 10,
+            "max_overflow": 20,
             "pool_recycle": 300,
         }
     )

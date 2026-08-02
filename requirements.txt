@@ -5,13 +5,11 @@ passlib
 sqlalchemy
 psycopg2-binary
 python-multipart
-requests
 google-auth
 uvicorn[standard]
 qqwry-py3
 boto3
-# czdb-searcher
-asyncpg       # 异步Postgres，适配Neon
+asyncpg
 httpx
 botocore
 python-dotenv

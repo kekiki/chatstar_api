@@ -29,6 +29,8 @@ MALE_NICKNAMES = [
 def _random_male_nickname() -> str:
     return random.choice(MALE_NICKNAMES)
 
+from sqlalchemy import func, literal_column
+
 from app.database import get_db
 from app.ip_location import IPLocationResult, ip_location
 from app.models import AppList, AppReview, BlackWhiteDevice, BlackWhiteIp, BlackWhiteUser, User, UserFollow, UserLike
@@ -170,18 +172,29 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
     db.add(user)
 
     user_dict = user.to_dict()
-    follows_result = await db.execute(select(UserFollow).where(UserFollow.user_id == user_id))
-    fans_result = await db.execute(select(UserFollow).where(UserFollow.follow_user_id == user_id))
-    likes_result = await db.execute(select(UserLike).where(UserLike.like_user_id == user_id))
-    user_dict["follow_count"] = len(follows_result.scalars().all())
-    user_dict["fans_count"] = len(fans_result.scalars().all())
-    user_dict["like_count"] = len(likes_result.scalars().all())
+    counts = await _get_user_counts(db, user_id)
+    user_dict.update(counts)
 
     return user_dict
 
 
+async def _get_user_counts(db: AsyncSession, user_id: int) -> dict:
+    follow_count_q = select(func.count()).select_from(UserFollow).where(UserFollow.user_id == user_id)
+    fans_count_q = select(func.count()).select_from(UserFollow).where(UserFollow.follow_user_id == user_id)
+    like_count_q = select(func.count()).select_from(UserLike).where(UserLike.like_user_id == user_id)
+    r1, r2, r3 = await asyncio.gather(
+        db.execute(follow_count_q),
+        db.execute(fans_count_q),
+        db.execute(like_count_q),
+    )
+    return {
+        "follow_count": r1.scalar_one(),
+        "fans_count": r2.scalar_one(),
+        "like_count": r3.scalar_one(),
+    }
+
+
 async def _query_user(request: Request, db: AsyncSession, package_name: str, user: User) -> dict:
-    """Query an existing user in the database."""
     device_id = request.headers.get("device-id")
     agent = request.headers.get("user-agent")
     client_ip = _get_client_real_ip(request)
@@ -201,12 +214,8 @@ async def _query_user(request: Request, db: AsyncSession, package_name: str, use
     user.is_review = is_review
 
     user_dict = user.to_dict()
-    follows_result = await db.execute(select(UserFollow).where(UserFollow.user_id == user.user_id))
-    fans_result = await db.execute(select(UserFollow).where(UserFollow.follow_user_id == user.user_id))
-    likes_result = await db.execute(select(UserLike).where(UserLike.like_user_id == user.user_id))
-    user_dict["follow_count"] = len(follows_result.scalars().all())
-    user_dict["fans_count"] = len(fans_result.scalars().all())
-    user_dict["like_count"] = len(likes_result.scalars().all())
+    counts = await _get_user_counts(db, user.user_id)
+    user_dict.update(counts)
 
     return user_dict
 
