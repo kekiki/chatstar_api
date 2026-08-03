@@ -26,8 +26,44 @@ MALE_NICKNAMES = [
     "Juan", "Louis", "Russell", "Vincent", "Philip", "Bobby", "Johnny", "Bradley",
 ]
 
+MALE_AVATARS = [
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/1_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/2_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/3_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/4_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/5_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/6_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/7_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/8_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/9_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/10_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/11_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/12_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/13_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/14_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/15_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/16_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/17_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/18_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/19_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/20_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/21_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/22_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/23_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/24_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/25_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/26_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/27_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/28_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/29_m.jpg",
+    "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/30_m.jpg",
+]
+
 def _random_male_nickname() -> str:
     return random.choice(MALE_NICKNAMES)
+
+def _random_male_avatar() -> str:
+    return random.choice(MALE_AVATARS)
 
 from sqlalchemy import func, literal_column
 
@@ -154,7 +190,7 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
         nickname = _random_male_nickname()
         google_id = None
         email = None
-        avatar = None
+        avatar = _random_male_avatar()
 
     user = User(
         user_id=user_id,
