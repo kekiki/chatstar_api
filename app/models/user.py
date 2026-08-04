@@ -1,8 +1,7 @@
 """
 User database model.
 """
-from functools import total_ordering
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from app.database import Base
 import datetime
 
@@ -11,9 +10,9 @@ class User(Base):
     __tablename__ = "app_users"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    device_id = Column(String(100), index=True)
-    package_name = Column(String(64), index=True)
+    user_id = Column(Integer, index=True, unique=True)
+    device_id = Column(String(64), index=True)
+    package_name = Column(String(100), ForeignKey("app_list.package_name"), index=True)
     created_time = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp()))
     country = Column(String(64), default="US")
     ip = Column(String(64))
@@ -25,13 +24,23 @@ class User(Base):
     vip_expire_time = Column(Integer)
     language_name = Column(String(64), default="English")
     language_code = Column(String(16), default="en")
-    agent = Column(String(255))
-    birthday = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp() - 86400 * 365 * 25))
-
-    # Review flag
     is_review = Column(Boolean, default=False)
+    agent = Column(String(255), default="")
+    birthday = Column(Integer, default=lambda: int(datetime.datetime.now().timestamp() - 86400 * 365 * 25))
+    password = Column(String(255))
+    total = Column(Integer, default=0)
+    firebase_token = Column(String(255))
 
-    # Install referrer tracking
+    gender = Column(Integer, default=0)
+    is_anchor = Column(Boolean, default=False, index=True)
+    age = Column(Integer, default=20)
+    follow_count = Column(Integer, default=0)
+    fans_count = Column(Integer, default=0)
+    like_count = Column(Integer, default=0)
+    call_price = Column(Integer, default=3600)
+    tags = Column(String)
+    info = Column(String)
+
     install_referrer = Column(String(255))
     referrer_click_timestamp_seconds = Column(Integer)
     install_begin_timestamp_seconds = Column(Integer)
@@ -39,9 +48,6 @@ class User(Base):
     install_begin_timestamp_server_seconds = Column(Integer)
     install_version = Column(String(64))
     google_play_instant = Column(Boolean, default=False)
-    password = Column(String(255))
-    total = Column(Integer, default=0) # 累计充值钻石数量
-    firebase_token = Column(String(255))
 
     @property
     def is_vip(self):
@@ -63,5 +69,14 @@ class User(Base):
             "birthday": self.birthday,
             "has_password": self.password is not None,
             "r_flag": self.is_review,
-            "total": self.total
+            "total": self.total,
+            "gender": self.gender,
+            "is_anchor": self.is_anchor,
+            "age": self.age,
+            "follow_count": self.follow_count,
+            "fans_count": self.fans_count,
+            "like_count": self.like_count,
+            "call_price": self.call_price,
+            "tags": self.tags,
+            "info": self.info,
             }

@@ -7,9 +7,8 @@ from qqwry import QQwry
 class IPLocationResult:
     def __init__(self, ip, country, isp):
         self.ip = ip
-        self.country = country
-        self.isp = isp
         self.country = country.split('–')[0] if country else ''
+        self.isp = isp
 
 class IPLocation:
     def __init__(self):

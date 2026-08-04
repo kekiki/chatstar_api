@@ -132,25 +132,27 @@ async def _check_review_user(db: AsyncSession, user_id: int, device_id: str, age
             is_review_user = True
 
     if is_review_user:
-        black_white_ip = BlackWhiteIp(
-            ip=ip_info.ip,
-            status=0,
-            remarks=f"用户{user_id}注册IP归属ISP为{ip_info.isp}",
-        )
-        black_white_device = BlackWhiteDevice(
-            device_id=device_id,
-            status=0,
-            remarks=f"用户{user_id}注册IP国家为[{ip_info.country}],设备为[{agent}]",
-        )
-        black_white_user = BlackWhiteUser(
-            user_id=user_id,
-            status=0,
-            remarks=f"注册IP国家为[{ip_info.country}],ISP为{ip_info.isp},设备为[{agent}]",
-        )
-
-        db.add(black_white_ip)
-        db.add(black_white_device)
-        db.add(black_white_user)
+        if not black_white_ip:
+            black_white_ip = BlackWhiteIp(
+                ip=ip_info.ip,
+                status=0,
+                remarks=f"用户{user_id}注册IP归属ISP为{ip_info.isp}",
+            )
+            db.add(black_white_ip)
+        if not black_white_device:
+            black_white_device = BlackWhiteDevice(
+                device_id=device_id,
+                status=0,
+                remarks=f"用户{user_id}注册IP国家为[{ip_info.country}],设备为[{agent}]",
+            )
+            db.add(black_white_device)
+        if not black_white_user:
+            black_white_user = BlackWhiteUser(
+                user_id=user_id,
+                status=0,
+                remarks=f"注册IP国家为[{ip_info.country}],ISP为{ip_info.isp},设备为[{agent}]",
+            )
+            db.add(black_white_user)
         return True
 
     return is_review_user

@@ -2,7 +2,7 @@
 User information routes.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -60,11 +60,10 @@ async def delete_account(user: User = Depends(current_user), db: AsyncSession = 
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/deleteAccountWithAccountPassword")
-async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Delete the current user's account with account password."""
-    user = await db.get(User, data.user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+    if user.user_id != data.user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if not verify_password(data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid password")
@@ -73,7 +72,7 @@ async def delete_account_with_account_password(data: DeleteAccountWithAccountPas
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/updateFirebaseToken")
-async def set_password(data: UpdateFirebaseTokenRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Set user password"""
+async def update_firebase_token(data: UpdateFirebaseTokenRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Update user firebase token"""
     user.firebase_token = data.firebase_token
     return {"code": 200, "data": {"message": "update successfully"}}

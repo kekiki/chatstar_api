@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException
-from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
@@ -17,7 +16,6 @@ from app.database import get_db, get_db_readonly
 from app.models import User
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt", "sha256_crypt"], deprecated="auto")
-bearer_scheme = HTTPBearer()
 
 
 def verify_password(plain: str, hashed: str) -> bool:

@@ -3,7 +3,7 @@ import uuid
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, WORKER_API_URL, R2_PUBLIC_DOMAIN
+from app.config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, WORKER_API_URL, R2_PUBLIC_DOMAIN
 import httpx
 from fastapi import HTTPException
 
@@ -36,7 +36,7 @@ class R2Client:
         resp = await client.post(
             WORKER_API_URL,
             headers={
-                "Content-Type": "applcation/json",
+                "Content-Type": "application/json",
             },
             json={
                 "fileName": file_name,
@@ -58,7 +58,7 @@ class R2Client:
         )
         return resp
 
-    async def upload_bytes(self, file_bytes: str, object_key: str):
+    async def upload_bytes(self, file_bytes: bytes, object_key: str):
         try:
             self.r2_client.put_object(
                 Bucket=R2_BUCKET_NAME,

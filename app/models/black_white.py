@@ -1,7 +1,7 @@
 """
 BlackWhite database model.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, DateTime
 from app.database import Base
 import datetime
 from enum import IntEnum
