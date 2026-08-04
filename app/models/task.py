@@ -7,8 +7,9 @@ class Task(Base):
     name = Column(String(100))
     desc = Column(String(255))
     icon = Column(String(255))
-    num = Column(Integer, default=0) # 签到任务的天数，签到任务的第几天, 其他任务需要完成的次数
-    type = Column(Integer, default=0) # 0:签到任务，1:每日任务，2:新手任务
+    num = Column(Integer, default=0) # 签到任务的第几天, 其他任务需要完成的次数
+    category = Column(Integer, default=0) # 0:签到任务，1:每日任务，2:新手任务
+    type = Column(String(50), default="")
     diamonds = Column(Integer)
     call_card_num = Column(Integer, default=0)
     match_card_num = Column(Integer, default=0)
@@ -21,6 +22,7 @@ class Task(Base):
             "desc": self.desc,
             "icon": self.icon,
             "num": self.num,
+            "category": self.category,
             "type": self.type,
             "diamonds": self.diamonds,
             "call_card_num": self.call_card_num,

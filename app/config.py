@@ -5,7 +5,10 @@ Handles environment variables and settings.
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+#develop
+# load_dotenv(dotenv_path='.env.local')
+# production
+load_dotenv(dotenv_path='.env')
 
 def get_env(key: str) -> str:
     val = os.getenv(key)
