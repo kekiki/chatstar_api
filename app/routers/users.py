@@ -60,12 +60,13 @@ async def delete_account(user: User = Depends(current_user), db: AsyncSession = 
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/deleteAccountWithAccountPassword")
-async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    """Delete the current user's account with account password."""
-    if user.user_id != data.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Delete account with user_id and password."""
+    user = await db.get(User, data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    if not verify_password(data.password, user.password):
+    if not user.password or not verify_password(data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid password")
     
     await db.delete(user)
