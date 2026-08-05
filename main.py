@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app import models
 from app.config import HOST, PORT
 from app.database import init_db_tables
-from app.routers import anchor, auth, orders, users, web, gifts
+from app.routers import auth, orders, users, web, gifts
 
 
 @asynccontextmanager
@@ -43,7 +43,6 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(web.router)
 app.include_router(orders.router)
-app.include_router(anchor.router)
 app.include_router(gifts.router)
 
 # ===================== Health check endpoint =====================

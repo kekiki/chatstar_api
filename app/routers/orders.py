@@ -8,30 +8,20 @@ from datetime import datetime
 import time
 from typing import List, Optional
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_db_readonly
 from app.models import Order, User, Product
-from app.schemas.order_request import CreateOrderRequest, VerifyGoogleRequest
+from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
+from app.tools import get_http_client
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
 
-_http_client: Optional[httpx.AsyncClient] = None
-
-
-async def _get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None or _http_client.is_closed:
-        _http_client = httpx.AsyncClient(timeout=10.0)
-    return _http_client
-
-
-@router.get("/products")
+@router.get("/order/products")
 async def get_products(request: Request, db: AsyncSession = Depends(get_db_readonly)):
     """Get product list filtered by package_name from request header."""
     package_name = request.headers.get("package-name")

@@ -8,8 +8,8 @@ class Task(Base):
     desc = Column(String(255))
     icon = Column(String(255))
     num = Column(Integer, default=0) # 签到任务的第几天, 其他任务需要完成的次数
-    category = Column(Integer, default=0) # 0:签到任务，1:每日任务，2:新手任务
-    type = Column(String(50), default="")
+    category = Column(Integer, default=0, index=True) # 0:签到任务，1:每日任务，2:新手任务
+    type = Column(String(50), default="", index=True)
     diamonds = Column(Integer)
     call_card_num = Column(Integer, default=0)
     match_card_num = Column(Integer, default=0)

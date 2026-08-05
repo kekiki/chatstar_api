@@ -4,17 +4,8 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, WORKER_API_URL, R2_PUBLIC_DOMAIN
-import httpx
+from app.tools import get_http_client
 from fastapi import HTTPException
-
-_http_client: httpx.AsyncClient | None = None
-
-
-async def _get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None or _http_client.is_closed:
-        _http_client = httpx.AsyncClient(verify=False, timeout=30.0)
-    return _http_client
 
 
 class R2Client:
@@ -32,7 +23,7 @@ class R2Client:
         self.bucket_name = R2_BUCKET_NAME
 
     async def get_r2_upload_url(self, file_name: str, content_type: str):
-        client = await _get_http_client()
+        client = await get_http_client()
         resp = await client.post(
             WORKER_API_URL,
             headers={
@@ -50,7 +41,7 @@ class R2Client:
         return resp.json()
 
     async def put_file_to_r2(self, upload_url, file_bytes, content_type):
-        client = await _get_http_client()
+        client = await get_http_client()
         resp = await client.put(
             upload_url,
             content=file_bytes,

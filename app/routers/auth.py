@@ -7,9 +7,17 @@ import random
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.ip_location import IPLocationResult, ip_location
+from app.models import AppList, AppReview, BlackWhiteDevice, BlackWhiteIp, BlackWhiteUser, User, UserFollow, UserLike
+from app.schemas import GoogleUserInfo, UserAgent, PasswordLoginRequest
+from app.security import create_token, verify_password
+
+router = APIRouter(prefix="/api", tags=["auth"])
+
 
 MALE_NICKNAMES = [
     "James", "Robert", "John", "Michael", "David", "William", "Richard", "Joseph",
@@ -65,20 +73,6 @@ def _random_male_nickname() -> str:
 def _random_male_avatar() -> str:
     return random.choice(MALE_AVATARS)
 
-from sqlalchemy import func, literal_column
-
-from app.database import get_db
-from app.ip_location import IPLocationResult, ip_location
-from app.models import AppList, AppReview, BlackWhiteDevice, BlackWhiteIp, BlackWhiteUser, User, UserFollow, UserLike
-from app.schemas import GoogleUserInfo, UserAgent
-from app.security import create_token, current_user, get_hash, verify_password
-
-router = APIRouter(prefix="/api", tags=["auth"])
-
-
-class PasswordLoginRequest(BaseModel):
-    user_id: int
-    password: str
 
 def _get_client_real_ip(request: Request) -> str:
     """适配 Railway / Cloudflare / 通用代理 获取真实访客IP"""
@@ -258,7 +252,7 @@ async def _query_user(request: Request, db: AsyncSession, package_name: str, use
     return user_dict
 
 
-@router.post("/loginGoogle")
+@router.post("/auth/loginGoogle")
 async def login_google(request: Request, data: GoogleUserInfo, db: AsyncSession = Depends(get_db)):
     """Login or register a user using Google account."""
     device_id = request.headers.get("device-id")
@@ -285,7 +279,7 @@ async def login_google(request: Request, data: GoogleUserInfo, db: AsyncSession 
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
 
-@router.post("/loginGuest")
+@router.post("/auth/loginGuest")
 async def login_guest(request: Request, db: AsyncSession = Depends(get_db)):
     """Login as a guest user with device_id from request header."""
     device_id = request.headers.get("device-id")
@@ -308,7 +302,7 @@ async def login_guest(request: Request, db: AsyncSession = Depends(get_db)):
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
 
-@router.post("/loginPassword")
+@router.post("/auth/loginPassword")
 async def login_password(request: Request, data: PasswordLoginRequest, db: AsyncSession = Depends(get_db)):
     """Login using user_id and password."""
     device_id = request.headers.get("device-id")
