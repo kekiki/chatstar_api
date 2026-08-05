@@ -32,6 +32,9 @@ class User(Base):
     firebase_token = Column(String(255))
 
     gender = Column(Integer, default=0)
+    call_card_num = Column(Integer, default=0)
+    match_card_num = Column(Integer, default=0)
+    chat_card_num = Column(Integer, default=0)
     is_anchor = Column(Boolean, default=False, index=True)
     age = Column(Integer, default=20)
     follow_count = Column(Integer, default=0)
@@ -71,6 +74,9 @@ class User(Base):
             "r_flag": self.is_review,
             "total": self.total,
             "gender": self.gender,
+            "call_card_num": self.call_card_num,
+            "match_card_num": self.match_card_num,
+            "chat_card_num": self.chat_card_num,
             "is_anchor": self.is_anchor,
             "age": self.age,
             "follow_count": self.follow_count,

@@ -144,7 +144,7 @@ async def _verify_google_purchase_with_api(package_name: str, product_id: str, t
     )
     headers = {"Authorization": f"Bearer {access_token}"}
     try:
-        client = await _get_http_client()
+        client = await get_http_client()
         resp = await client.get(url, headers=headers)
     except Exception as e:
         logger.exception("HTTP request to Google failed: %s", e)
@@ -182,5 +182,7 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
     if purchase_state == 0:
         order.order_status = 1
         db.add(order)
+        from app.routers.tasks import add_task_progress
+        await add_task_progress(db, user.user_id, "recharge", 1)
 
     return {"code": 200, "data": {"verified": purchase_state == 0, "google": result}}

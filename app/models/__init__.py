@@ -9,6 +9,6 @@ from .user_likes import UserLike
 from .media import Media
 from .app_review import AppReview
 from .gift import Gift
-from .task import Task
+from .task import Task, TaskRecord
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "Task"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "Task", "TaskRecord"]

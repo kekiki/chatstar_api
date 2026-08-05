@@ -4,6 +4,7 @@
 from .auth import GoogleUserInfo, GoogleAttribution, UserAgent, PasswordLoginRequest
 from .orders import CreateOrderRequest, VerifyGoogleRequest
 from .users import UserInfoRequest, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest
+from .tasks import TaskReportRequest, TaskReceiveRequest
 
 __all__ = [
     "GoogleUserInfo",
@@ -17,4 +18,6 @@ __all__ = [
     "SetPasswordRequest",
     "UpdateFirebaseTokenRequest",
     "PasswordLoginRequest",
+    "TaskReportRequest",
+    "TaskReceiveRequest",
 ]
