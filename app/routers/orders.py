@@ -184,5 +184,13 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
         db.add(order)
         from app.routers.tasks import add_task_progress
         await add_task_progress(db, user.user_id, "recharge", 1)
+        from app.notify import push_notification
+        await push_notification(
+            db,
+            user.user_id,
+            "order_status",
+            "Recharge successful",
+            {"order_no": order.order_no, "order_status": 1, "sku": order.sku},
+        )
 
     return {"code": 200, "data": {"verified": purchase_state == 0, "google": result}}

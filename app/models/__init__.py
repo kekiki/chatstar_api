@@ -10,5 +10,7 @@ from .media import Media
 from .app_review import AppReview
 from .gift import Gift
 from .task import Task, TaskRecord
+from .message import ChatMessage
+from .notification import Notification
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "Task", "TaskRecord"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "Task", "TaskRecord", "ChatMessage", "Notification"]
