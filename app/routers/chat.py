@@ -1,5 +1,5 @@
 """
-Chat and notification routes: REST APIs plus a WebSocket endpoint.
+Chat routes: history via REST, everything else over WebSocket.
 WebSocket is also used by the notification service (balance/order/gift pack pushes).
 """
 import asyncio
@@ -15,10 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ALGORITHM, SECRET_KEY
 from app.database import AsyncSessionLocal, get_db, get_db_readonly
-from app.models import ChatMessage, Gift, Notification, User
-from app.models.message import MSG_TYPES
-from app.notify import push_notification
-from app.schemas import NotifyReadRequest, ReadMessagesRequest, SendMessageRequest
+from app.models import ChatMessage, Gift, User
+from app.schemas import SendMessageRequest
 from app.security import current_user, current_user_readonly
 from app.ws_manager import ws_manager
 
@@ -41,9 +39,6 @@ async def _build_content(db: AsyncSession, data: SendMessageRequest) -> str:
         payload = {
             "url": data.media_url,
             "cover": data.media_cover,
-            "width": data.media_width,
-            "height": data.media_height,
-            "duration": data.media_duration,
         }
         return json.dumps({k: v for k, v in payload.items() if v is not None}, ensure_ascii=False)
     if data.msg_type == "gift":
@@ -81,9 +76,10 @@ async def send_chat_message(
     )
     db.add(message)
     await db.flush()
-    delivered = await ws_manager.send_to_user(receiver_id, "chat_message", message.to_dict())
-    if delivered:
-        message.is_delivered = True
+    # delivered = await ws_manager.send_to_user(receiver_id, "chat_message", message.to_dict())
+    # if delivered:
+    #     message.is_delivered = True
+    message.is_delivered = True
     return message
 
 
@@ -96,12 +92,40 @@ async def send_message(
     """Send a one-to-one chat message (text/image/video/gift)."""
     if data.receiver_id == user.user_id:
         raise HTTPException(400, "cannot send message to yourself")
-    peer = await db.scalar(select(User).where(User.user_id == data.receiver_id))
-    if not peer:
-        raise HTTPException(404, "Receiver not found")
     content = await _build_content(db, data)
     message = await send_chat_message(db, user.user_id, data.receiver_id, data.msg_type, content)
-    return {"code": 200, "data": message.to_dict()}
+    peer = await db.scalar(select(User).where(User.user_id == data.receiver_id))
+    return {"code": 200, "data": message.to_dict() | {"nickname": peer.nickname, "avatar": peer.avatar}}
+
+
+async def build_conversations(db: AsyncSession, user_id: int) -> list:
+    """Build recent conversations with last message and unread count."""
+    result = await db.execute(
+        select(ChatMessage)
+        .where(or_(ChatMessage.sender_id == user_id, ChatMessage.receiver_id == user_id))
+        .order_by(desc(ChatMessage.id))
+        .limit(1000)
+    )
+    convs = {}
+    for m in result.scalars().all():
+        peer_id = m.receiver_id if m.sender_id == user_id else m.sender_id
+        conv = convs.get(peer_id)
+        if not conv:
+            conv = {"peer_id": peer_id, "last_message": m.to_dict(), "unread_count": 0}
+            convs[peer_id] = conv
+        if m.receiver_id == user_id and not m.is_read:
+            conv["unread_count"] += 1
+    items = list(convs.values())
+    if items:
+        peer_result = await db.execute(select(User).where(User.user_id.in_([c["peer_id"] for c in items])))
+        peers = {u.user_id: u for u in peer_result.scalars().all()}
+        for conv in items:
+            peer = peers.get(conv["peer_id"])
+            if peer:
+                conv["nickname"] = peer.nickname
+                conv["avatar"] = peer.avatar
+                conv["is_anchor"] = peer.is_anchor
+    return items
 
 
 @router.get("/chat/history")
@@ -125,127 +149,8 @@ async def chat_history(
         select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(limit)
     )
     messages = result.scalars().all()
-    return {"code": 200, "data": [m.to_dict() for m in messages]}
-
-
-@router.get("/chat/offline")
-async def offline_messages(
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Pull undelivered (offline) messages and mark them delivered."""
-    result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.receiver_id == user.user_id, ChatMessage.is_delivered.is_(False))
-        .order_by(ChatMessage.id.asc())
-        .limit(500)
-    )
-    messages = result.scalars().all()
-    for m in messages:
-        m.is_delivered = True
-    return {"code": 200, "data": [m.to_dict() for m in messages]}
-
-
-@router.post("/chat/read")
-async def read_messages(
-    data: ReadMessagesRequest,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Mark all messages from a peer as read."""
-    result = await db.execute(
-        update(ChatMessage)
-        .where(
-            ChatMessage.receiver_id == user.user_id,
-            ChatMessage.sender_id == data.peer_id,
-            ChatMessage.is_read.is_(False),
-        )
-        .values(is_read=True)
-    )
-    return {"code": 200, "data": {"updated": result.rowcount}}
-
-
-@router.get("/chat/conversations")
-async def conversations(
-    user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
-):
-    """List recent conversations with last message and unread count."""
-    result = await db.execute(
-        select(ChatMessage)
-        .where(or_(ChatMessage.sender_id == user.user_id, ChatMessage.receiver_id == user.user_id))
-        .order_by(desc(ChatMessage.id))
-        .limit(1000)
-    )
-    convs = {}
-    for m in result.scalars().all():
-        peer_id = m.receiver_id if m.sender_id == user.user_id else m.sender_id
-        conv = convs.get(peer_id)
-        if not conv:
-            conv = {"peer_id": peer_id, "last_message": m.to_dict(), "unread_count": 0}
-            convs[peer_id] = conv
-        if m.receiver_id == user.user_id and not m.is_read:
-            conv["unread_count"] += 1
-    items = list(convs.values())
-    if items:
-        peer_result = await db.execute(select(User).where(User.user_id.in_([c["peer_id"] for c in items])))
-        peers = {u.user_id: u for u in peer_result.scalars().all()}
-        for conv in items:
-            peer = peers.get(conv["peer_id"])
-            if peer:
-                conv["nickname"] = peer.nickname
-                conv["avatar"] = peer.avatar
-                conv["is_anchor"] = peer.is_anchor
-    return {"code": 200, "data": items}
-
-
-@router.get("/notify/list")
-async def notify_list(
-    notify_type: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    size: int = Query(20, le=100),
-    user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
-):
-    """List notifications for the current user, newest first."""
-    conds = [Notification.user_id == user.user_id]
-    if notify_type:
-        conds.append(Notification.notify_type == notify_type)
-    total = await db.scalar(select(func.count(Notification.id)).where(*conds))
-    result = await db.execute(
-        select(Notification)
-        .where(*conds)
-        .order_by(desc(Notification.id))
-        .offset((page - 1) * size)
-        .limit(size)
-    )
-    unread = await db.scalar(
-        select(func.count(Notification.id)).where(
-            Notification.user_id == user.user_id, Notification.is_read.is_(False)
-        )
-    )
-    return {
-        "code": 200,
-        "data": {
-            "total": total or 0,
-            "unread_count": unread or 0,
-            "items": [n.to_dict() for n in result.scalars().all()],
-        },
-    }
-
-
-@router.post("/notify/read")
-async def read_notifications(
-    data: NotifyReadRequest,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Mark notifications as read; empty ids marks all as read."""
-    conds = [Notification.user_id == user.user_id, Notification.is_read.is_(False)]
-    if data.ids:
-        conds.append(Notification.id.in_(data.ids))
-    result = await db.execute(update(Notification).where(*conds).values(is_read=True))
-    return {"code": 200, "data": {"updated": result.rowcount}}
+    peer = await db.scalar(select(User).where(User.user_id == peer_id))
+    return {"code": 200, "data": [m.to_dict() | {"nickname": peer.nickname, "avatar": peer.avatar} for m in messages]}
 
 
 def _decode_ws_token(token: str) -> Optional[int]:
@@ -266,30 +171,37 @@ async def _handle_ws_action(user_id: int, raw: str) -> dict:
     action = frame.get("action")
     if action == "ping":
         return {"event": "pong", "data": {}}
-    if action == "send_chat_message":
+    if action == "read_messages":
         data = frame.get("data") or {}
-        try:
-            req = SendMessageRequest(**data)
-        except Exception as e:
-            return {"event": "error", "data": {"msg": f"invalid message: {e}"}}
-        if req.receiver_id == user_id:
-            return {"event": "error", "data": {"msg": "cannot send message to yourself"}}
+        peer_id = data.get("peer_id")
+        if not peer_id:
+            return {"event": "error", "data": {"msg": "peer_id is required"}}
         async with AsyncSessionLocal() as db:
             try:
-                peer = await db.scalar(select(User).where(User.user_id == req.receiver_id))
-                if not peer:
-                    return {"event": "error", "data": {"msg": "receiver not found"}}
-                content = await _build_content(db, req)
-                message = await send_chat_message(db, user_id, req.receiver_id, req.msg_type, content)
-                ack_data = message.to_dict()
+                result = await db.execute(
+                    update(ChatMessage)
+                    .where(
+                        ChatMessage.receiver_id == user_id,
+                        ChatMessage.sender_id == int(peer_id),
+                        ChatMessage.is_read.is_(False),
+                    )
+                    .values(is_read=True)
+                )
                 await db.commit()
-            except HTTPException as e:
-                return {"event": "error", "data": {"msg": e.detail}}
+                updated = result.rowcount
             except Exception as e:
                 await db.rollback()
-                logger.exception("ws send_chat_message failed")
+                logger.exception("ws read_messages failed")
                 return {"event": "error", "data": {"msg": str(e)}}
-        return {"event": "message_ack", "data": ack_data}
+        return {"event": "read_ack", "data": {"peer_id": int(peer_id), "updated": updated}}
+    if action == "get_conversations":
+        async with AsyncSessionLocal() as db:
+            try:
+                items = await build_conversations(db, user_id)
+            except Exception as e:
+                logger.exception("ws get_conversations failed")
+                return {"event": "error", "data": {"msg": str(e)}}
+        return {"event": "conversations", "data": items}
     return {"event": "error", "data": {"msg": f"unknown action: {action}"}}
 
 
@@ -297,8 +209,13 @@ async def _handle_ws_action(user_id: int, raw: str) -> dict:
 async def ws_connect(websocket: WebSocket, token: str = Query(...)):
     """WebSocket endpoint for chat and notifications.
 
-    Client -> Server frames: {"action": "ping"} / {"action": "send_message", "data": {...}}
-    Server -> Client events: init / chat_message / notification / message_ack / pong / error
+    Client -> Server actions:
+      {"action": "ping"}
+      {"action": "read_messages", "data": {"peer_id": 123}}
+      {"action": "get_conversations"}
+    Server -> Client events:
+      init / chat_message / offline_messages / conversations /
+      read_ack / pong / error
     """
     user_id = _decode_ws_token(token)
     if not user_id:
@@ -308,24 +225,21 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
     await ws_manager.connect(user_id, websocket)
     try:
         async with AsyncSessionLocal() as db:
-            offline_count = await db.scalar(
-                select(func.count(ChatMessage.id)).where(
-                    ChatMessage.receiver_id == user_id, ChatMessage.is_delivered.is_(False)
-                )
+            result = await db.execute(
+                select(ChatMessage)
+                .where(ChatMessage.receiver_id == user_id, ChatMessage.is_delivered.is_(False))
+                .order_by(ChatMessage.id.asc())
+                .limit(500)
             )
-            unread_notify = await db.scalar(
-                select(func.count(Notification.id)).where(
-                    Notification.user_id == user_id, Notification.is_read.is_(False)
-                )
-            )
-        await websocket.send_text(json.dumps({
-            "event": "init",
-            "data": {
-                "user_id": user_id,
-                "offline_message_count": offline_count or 0,
-                "unread_notify_count": unread_notify or 0,
-            },
-        }))
+            offline_msgs = result.scalars().all()
+            if offline_msgs:
+                await websocket.send_text(json.dumps({
+                    "event": "offline_messages",
+                    "data": [m.to_dict() for m in offline_msgs],
+                }, ensure_ascii=False))
+                for m in offline_msgs:
+                    m.is_delivered = True
+                await db.commit()
         while True:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_IDLE_TIMEOUT)
