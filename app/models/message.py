@@ -33,12 +33,9 @@ class ChatMessage(Base):
         except (TypeError, ValueError):
             return self.content
 
-    def to_dict(self, user_id, portrait, nickname):
+    def to_dict(self):
         return {
             "id": self.msg_no,
-            "user_id": user_id,
-            "portrait": portrait,
-            "nickname": nickname,
             "type": self.msg_type,
             "content": self.content_data(),
             "timestamp": self.created_time,

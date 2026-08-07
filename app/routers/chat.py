@@ -94,8 +94,7 @@ async def send_message(
         raise HTTPException(400, "cannot send message to yourself")
     content = await _build_content(db, data)
     message = await send_chat_message(db, user.user_id, data.receiver_id, data.msg_type, content)
-    peer = await db.scalar(select(User).where(User.user_id == data.receiver_id))
-    return {"code": 200, "data": message.to_dict() | {"nickname": peer.nickname, "avatar": peer.avatar}}
+    return {"code": 200, "data": message.to_dict()}
 
 
 async def build_conversations(db: AsyncSession, user_id: int) -> list:
@@ -149,8 +148,7 @@ async def chat_history(
         select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(limit)
     )
     messages = result.scalars().all()
-    peer = await db.scalar(select(User).where(User.user_id == peer_id))
-    return {"code": 200, "data": [m.to_dict() | {"nickname": peer.nickname, "avatar": peer.avatar} for m in messages]}
+    return {"code": 200, "data": [m.to_dict() | {"user_id": peer_id, 'is_self_sent': m.sender_id == user.user_id} for m in messages]}
 
 
 def _decode_ws_token(token: str) -> Optional[int]:
@@ -235,7 +233,7 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
             if offline_msgs:
                 await websocket.send_text(json.dumps({
                     "event": "offline_messages",
-                    "data": [m.to_dict() for m in offline_msgs],
+                    "data": [m.to_dict() | {"user_id": m.sender_id if m.sender_id != user_id else m.receiver_id, 'is_self_sent': m.sender_id == user_id} for m in offline_msgs],
                 }, ensure_ascii=False))
                 for m in offline_msgs:
                     m.is_delivered = True
