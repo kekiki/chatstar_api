@@ -10,9 +10,6 @@ class SetPasswordRequest(BaseModel):
 class UpdateFirebaseTokenRequest(BaseModel):
     firebase_token: str
 
-class UserInfoRequest(BaseModel):
-    user_id: int
-
 class GoogleTranslateRequest(BaseModel):
     """
     Google translate request schema

@@ -11,7 +11,7 @@ from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
 from app.models import Media, User, UserFollow, UserLike
-from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UserInfoRequest
+from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.tools import get_http_client
 
@@ -182,12 +182,45 @@ async def get_users(
 
 @router.get("/user/getUserDetail")
 async def get_user_detail(
-    data: UserInfoRequest,
+    user_id: int,
     user: User = Depends(current_user_readonly),
     db: AsyncSession = Depends(get_db_readonly)
-):
-    user = await db.get(User, data.user_id)
+):  
+    result = await db.execute(select(User).where(User.user_id == user_id, User.is_review == user.is_review))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    anchor_user_ids = [user.user_id]
+
+    media_result = await db.execute(
+        select(Media).where(Media.user_id.in_(anchor_user_ids))
+    )
+    media_map: dict[int, list] = {}
+    for media in media_result.scalars().all():
+        media_map.setdefault(media.user_id, []).append(media.to_dict())
+
+    followed_result = await db.execute(
+        select(UserFollow.follow_user_id).where(
+            UserFollow.user_id == user.user_id,
+            UserFollow.follow_user_id.in_(anchor_user_ids),
+        )
+    )
+    followed_ids = set(followed_result.scalars().all())
+
+    liked_result = await db.execute(
+        select(UserLike.like_user_id).where(
+            UserLike.user_id == user.user_id,
+            UserLike.like_user_id.in_(anchor_user_ids),
+        )
+    )
+    liked_ids = set(liked_result.scalars().all())
     
-    return {"code": 200, "data": user.to_dict()}
+    anchor_dict = user.to_dict()
+    anchor_dict["media_list"] = media_map.get(user.user_id, [])
+    anchor_dict["is_hot"] = user.fans_count > 10000
+    anchor_dict["is_new"] = user.created_time is not None and user.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
+    anchor_dict["online_status"] = 0
+    anchor_dict["is_followed"] = user.user_id in followed_ids
+    anchor_dict["is_liked"] = user.user_id in liked_ids
+    return {"code": 200, "data": anchor_dict}
