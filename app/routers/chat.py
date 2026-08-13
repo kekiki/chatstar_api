@@ -222,22 +222,26 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
     await websocket.accept()
     await ws_manager.connect(user_id, websocket)
     try:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(ChatMessage)
-                .where(ChatMessage.receiver_id == user_id, ChatMessage.is_delivered.is_(False))
-                .order_by(ChatMessage.id.asc())
-                .limit(500)
-            )
-            offline_msgs = result.scalars().all()
-            if offline_msgs:
-                await websocket.send_text(json.dumps({
-                    "event": "offline_messages",
-                    "data": [m.to_dict() | {"user_id": m.sender_id if m.sender_id != user_id else m.receiver_id, 'is_self_sent': m.sender_id == user_id} for m in offline_msgs],
+        await websocket.send_text(json.dumps({
+                    "event": "init",
+                    "data": {},
                 }, ensure_ascii=False))
-                for m in offline_msgs:
-                    m.is_delivered = True
-                await db.commit()
+        # async with AsyncSessionLocal() as db:
+        #     result = await db.execute(
+        #         select(ChatMessage)
+        #         .where(ChatMessage.receiver_id == user_id, ChatMessage.is_delivered.is_(False))
+        #         .order_by(ChatMessage.id.asc())
+        #         .limit(500)
+        #     )
+        #     offline_msgs = result.scalars().all()
+        #     if offline_msgs:
+        #         await websocket.send_text(json.dumps({
+        #             "event": "offline_messages",
+        #             "data": [m.to_dict() | {"user_id": m.sender_id if m.sender_id != user_id else m.receiver_id, 'is_self_sent': m.sender_id == user_id} for m in offline_msgs],
+        #         }, ensure_ascii=False))
+        #         for m in offline_msgs:
+        #             m.is_delivered = True
+        #         await db.commit()
         while True:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_IDLE_TIMEOUT)
