@@ -92,7 +92,7 @@ async def get_tasks(user: User = Depends(current_user), db: AsyncSession = Depen
     today = datetime.date.today()
 
     result = await db.execute(
-        select(Task).where(Task.status == 1).order_by(Task.category.asc(), Task.sort.asc(), Task.id.asc())
+        select(Task).where(Task.status == 1).order_by(Task.category.asc(), Task.sort.asc())
     )
     tasks = result.scalars().all()
 
@@ -142,7 +142,7 @@ async def get_tasks(user: User = Depends(current_user), db: AsyncSession = Depen
         "data": {
             "signin": {
                 "signed_today": signed_today,
-                "current_day": streak_day,
+                "streak_day": streak_day,
                 "cycle_days": SIGNIN_CYCLE_DAYS,
                 "items": signin_items,
             },
@@ -150,7 +150,6 @@ async def get_tasks(user: User = Depends(current_user), db: AsyncSession = Depen
             "newcomer": newcomer_items,
         },
     }
-
 
 @router.post("/user/signin")
 async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
@@ -192,10 +191,7 @@ async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(
 
     return {
         "code": 200,
-        "data": {
-            "day": day,
-            "reward": _reward_dict(task),
-        },
+        "data": _reward_dict(task),
     }
 
 
