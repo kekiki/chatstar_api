@@ -31,8 +31,6 @@ class Task(Base):
     def to_dict(self):
         return {
             "id": self.id,
-            "name": self.name,
-            "desc": self.desc,
             "icon": self.icon,
             "num": self.num,
             "category": self.category,
