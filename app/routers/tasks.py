@@ -124,7 +124,7 @@ async def get_tasks(user: User = Depends(current_user), db: AsyncSession = Depen
     for task in tasks:
         item = task.to_dict()
         if task.category == CATEGORY_SIGNIN:
-            item["status"] = STATUS_CLAIMED if task.num <= streak_day else (STATUS_CLAIMABLE if task.num == streak_day + 1 else STATUS_DOING)
+            item["status"] = STATUS_CLAIMED if task.num <= streak_day else (STATUS_CLAIMABLE if task.num == streak_day + 1 and not signed_today else STATUS_DOING)
             signin_items.append(item)
         elif task.category == CATEGORY_DAILY:
             record = record_map.get(task.id)
