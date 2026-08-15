@@ -9,7 +9,7 @@ from app.security import current_user
 router = APIRouter(prefix="/api", tags=["gifts"])
 
 
-@router.get("/config/gifts")
+@router.get("/user/gifts")
 async def get_gifts(user: User = Depends(current_user), db: AsyncSession = Depends(get_db_readonly)):
     """Get all gifts sorted by price."""
     result = await db.execute(select(Gift).order_by(Gift.gift_price.asc()))

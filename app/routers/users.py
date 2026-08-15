@@ -10,7 +10,7 @@ import datetime
 from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
-from app.models import Media, User, UserFollow, UserLike
+from app.models import Media, User, UserFollow, UserLike, GiftRecord
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.tools import get_http_client
@@ -200,6 +200,13 @@ async def get_user_detail(
     for media in media_result.scalars().all():
         media_map.setdefault(media.user_id, []).append(media.to_dict())
 
+    gift_result = await db.execute(
+        select(GiftRecord).where(GiftRecord.receiver_id == user.user_id)
+    )
+    gift_map: dict[int, list] = {}
+    for gift in gift_result.scalars().all():
+        gift_map.setdefault(gift.receiver_id, []).append(gift.to_dict())
+
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(
             UserFollow.user_id == user.user_id,
@@ -218,6 +225,7 @@ async def get_user_detail(
     
     anchor_dict = user.to_dict()
     anchor_dict["media_list"] = media_map.get(user.user_id, [])
+    anchor_dict["gift_list"] = gift_map.get(user.user_id, [])
     anchor_dict["is_hot"] = user.fans_count > 10000
     anchor_dict["is_new"] = user.created_time is not None and user.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
     anchor_dict["online_status"] = 0

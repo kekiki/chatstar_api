@@ -8,8 +8,8 @@ from .user_follows import UserFollow
 from .user_likes import UserLike
 from .media import Media
 from .app_review import AppReview
-from .gift import Gift
+from .gift import Gift, GiftRecord
 from .task import Task, TaskRecord
 from .message import ChatMessage
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "Task", "TaskRecord", "ChatMessage"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage"]
