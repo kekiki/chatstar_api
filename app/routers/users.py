@@ -164,7 +164,7 @@ async def get_users(
         anchor_dict["media_list"] = media_map.get(anchor.user_id, [])
         anchor_dict["is_hot"] = anchor.fans_count > 10000
         anchor_dict["is_new"] = anchor.created_time is not None and anchor.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
-        anchor_dict["online_status"] = 0
+        anchor_dict["online_status"] = 1 if anchor.is_review else 0
         anchor_dict["is_followed"] = anchor.user_id in followed_ids
         anchor_dict["is_liked"] = anchor.user_id in liked_ids
         items.append(anchor_dict)
@@ -228,7 +228,7 @@ async def get_user_detail(
     anchor_dict["gift_list"] = gift_map.get(user.user_id, [])
     anchor_dict["is_hot"] = user.fans_count > 10000
     anchor_dict["is_new"] = user.created_time is not None and user.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
-    anchor_dict["online_status"] = 0
+    anchor_dict["online_status"] = 1 if user.is_review else 0
     anchor_dict["is_followed"] = user.user_id in followed_ids
     anchor_dict["is_liked"] = user.user_id in liked_ids
     return {"code": 200, "data": anchor_dict}
