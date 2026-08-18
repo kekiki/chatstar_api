@@ -11,5 +11,7 @@ from .app_review import AppReview
 from .gift import Gift, GiftRecord
 from .task import Task, TaskRecord
 from .message import ChatMessage
+from .user_block import UserBlock
+from .user_report import UserReport
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport"]
