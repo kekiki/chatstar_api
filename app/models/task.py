@@ -12,6 +12,16 @@ STATUS_DOING = 0    # 进行中
 STATUS_CLAIMABLE = 1 # 已完成待领取
 STATUS_CLAIMED = 2  # 已领取
 
+#任务类型
+TYPE_FOLLOW_USERS = "follow_users" # 关注
+TYPE_UNLOCK_VIP = "unlock_vip" # 解锁VIP
+TYPE_FIRST_RECHARGE = "first_recharge" # 首充
+TYPE_ACTIVE_CALL = "active_call" # 主动通话
+TYPE_RATE_APP = "rate_app" # 评分应用
+TYPE_SEND_GIFT = "send_gift" # 送礼
+TYPE_MATCH_TIMES = "match_times" # 匹配次数
+TYPE_RECHARGE_TIMES = "recharge_times" # 充值次数
+
 class Task(Base):
     __tablename__ = "app_tasks"
     id = Column(Integer, primary_key=True)
@@ -20,7 +30,7 @@ class Task(Base):
     icon = Column(String(255))
     num = Column(Integer, default=0) # 签到任务:第几天(1-7); 其他任务:需要完成的次数
     category = Column(Integer, default=0, index=True) # 0:签到任务，1:每日任务，2:新手任务
-    type = Column(String(50), default="", index=True) # 事件类型: signin/recharge/follow 等
+    type = Column(String(50), default="", index=True) # 事件类型: 关注、解锁VIP、首充等
     reward_diamonds = Column(Integer, default=0)
     call_card_num = Column(Integer, default=0)
     match_card_num = Column(Integer, default=0)

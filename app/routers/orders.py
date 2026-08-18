@@ -13,10 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_db_readonly
-from app.models import Order, User, Product
+from app.models import Order, User, Product, Task
 from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
 from app.tools import get_http_client
+from app.models.task import TYPE_RECHARGE_TIMES, TYPE_UNLOCK_VIP, TYPE_FIRST_RECHARGE
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -174,6 +175,11 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
 
     purchase_state = result.get("purchaseState")
 
+    result_product = await db.execute(select(Product).where(Product.sku == data.product_id))
+    product = result_product.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
     result_order = await db.execute(select(Order).where(Order.order_no == data.order_no, Order.user_id == user.user_id))
     order = result_order.scalar_one_or_none()
     if not order:
@@ -182,8 +188,17 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
     if purchase_state == 0:
         order.order_status = 1
         db.add(order)
+        
         from app.routers.tasks import add_task_progress
-        await add_task_progress(db, user.user_id, "recharge_times", 1)
+        task_type = TYPE_UNLOCK_VIP if order.isVip() else TYPE_RECHARGE_TIMES
+        await add_task_progress(db, user.user_id, task_type, 1)
+        if user.total == 0:
+            await add_task_progress(db, user.user_id, TYPE_FIRST_RECHARGE, 1)
+        
+        # TODO: 更新用户余额和用户充值总钻石数
+        user.balance = (user.balance or 0) + (product.diamonds or 0)
+        user.total = (user.total or 0) + product.diamonds
+        
         from app.notify import push_notification
         await push_notification(
             db,

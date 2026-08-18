@@ -27,6 +27,9 @@ class Order(Base):
     path = Column(String, default="", index=True)
     agent = Column(String, default="", index=True)
 
+    def isVip(self):
+        return self.type == 2
+
     def to_dict(self):
         return {
             "id": self.id,

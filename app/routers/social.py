@@ -9,7 +9,8 @@ from sqlalchemy import desc, func, select, and_
 from app.database import get_db, get_db_readonly
 from app.models import User, UserFollow, UserLike, UserBlock, UserReport
 from app.security import current_user, current_user_readonly
-
+from app.routers.tasks import add_task_progress
+from app.models.task import TYPE_FOLLOW_USERS
 
 router = APIRouter(prefix="/api", tags=["social"])
 
@@ -37,9 +38,9 @@ async def follow_user(
         return {"code": 400, "msg": "Already followed"}
     db.add(UserFollow(user_id=user.user_id, follow_user_id=target_user_id))
     user.follow_count += 1
-    target.fans_count += 1
+    target.fans_count += 1  
+    await add_task_progress(db, user.user_id, TYPE_FOLLOW_USERS, 1)
     return {"code": 200, "msg": "success"}
-
 
 @router.post("/user/unfollow")
 async def unfollow_user(
@@ -107,6 +108,46 @@ async def unblock_user(
         return {"code": 400, "msg": "Not blocked"}
     await db.delete(block)
     return {"code": 200, "msg": "success"}
+
+
+# ===================== List: My Blocks =====================
+
+@router.get("/user/blocks")
+async def get_my_blocks(
+    user: User = Depends(current_user_readonly),
+    db: AsyncSession = Depends(get_db_readonly),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    count_query = select(func.count()).select_from(UserBlock).where(UserBlock.user_id == user.user_id)
+    total = (await db.execute(count_query)).scalar_one()
+
+    query = (
+        select(UserBlock, User)
+        .join(User, UserBlock.block_user_id == User.user_id)
+        .where(UserBlock.user_id == user.user_id)
+        .order_by(desc(UserBlock.created_time))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = (await db.execute(query)).all()
+
+    items = []
+    for block_row, blocked_user in rows:
+        d = blocked_user.to_dict()
+        d["blocked_at"] = block_row.created_time.isoformat() if block_row.created_time else None
+        items.append(d)
+
+    return {
+        "code": 200,
+        "data": {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+        },
+    }
 
 
 # ===================== Like =====================
