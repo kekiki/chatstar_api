@@ -2,7 +2,7 @@
 User information routes.
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select
 
@@ -13,7 +13,7 @@ from app.database import get_db, get_db_readonly
 from app.models import Media, User, UserFollow, UserLike, GiftRecord
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
-from app.tools import get_http_client
+from app.translator import Translator
 
 
 router = APIRouter(prefix="/api", tags=["users"])
@@ -75,16 +75,9 @@ async def update_firebase_token(data: UpdateFirebaseTokenRequest, user: User = D
 @router.post("/user/translate")
 async def translate(data: GoogleTranslateRequest, user: User = Depends(current_user_readonly)):
     """Translate text using Google Translate"""
-    url = f'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={data.target_language}&dt=t&q={data.text}'
-    client = await get_http_client()
-    resp = await client.get(
-        url,
-        content=None,
-        headers={"Content-Type": "application/json"}
-    )
-    print(resp.text)
-    return {"code": 200, "data": {"translated_text": resp.text}}
-
+    translator = Translator()
+    res = translator.translate(data.text, tl=data.target_language)
+    return {"code": 200, "data": res}
 
 @router.get("/user/getUsers")
 async def get_users(
