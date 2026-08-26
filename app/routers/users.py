@@ -129,7 +129,7 @@ async def get_users(
     anchor_user_ids = [a.user_id for a in anchors]
 
     media_result = await db.execute(
-        select(Media).where(Media.user_id.in_(anchor_user_ids))
+        select(Media).where(Media.user_id.in_(anchor_user_ids), Media.video_type == 0)
     )
     media_map: dict[int, list] = {}
     for media in media_result.scalars().all():
@@ -187,7 +187,7 @@ async def get_user_detail(
     anchor_user_ids = [user.user_id]
 
     media_result = await db.execute(
-        select(Media).where(Media.user_id.in_(anchor_user_ids))
+        select(Media).where(Media.user_id.in_(anchor_user_ids), Media.video_type == 0)
     )
     media_map: dict[int, list] = {}
     for media in media_result.scalars().all():

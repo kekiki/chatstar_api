@@ -16,6 +16,7 @@ class Media(Base):
     url = Column(String, default="")
     is_vip = Column(Boolean, default=False)
     is_video = Column(Boolean, default=False)
+    video_type = Column(Integer, index=True, default=0) # 0: 普通视频, 1: 通话视频, 2: 直播视频
     created_time = Column(DateTime, default=lambda: datetime.datetime.now())
 
     def to_dict(self):
