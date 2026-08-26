@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class DeleteAccountWithAccountPasswordRequest(BaseModel):
     user_id: int
@@ -16,3 +17,8 @@ class GoogleTranslateRequest(BaseModel):
     """
     text: str
     target_language: str
+
+class UpdateUserInfoRequest(BaseModel):
+    avatar: Optional[str] = None        # 头像
+    nickname: Optional[str] = None      # 昵称
+    birthday: Optional[int] = None      # 生日（Unix时间戳）

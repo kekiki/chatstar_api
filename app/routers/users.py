@@ -11,7 +11,7 @@ from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
 from app.models import Media, User, UserFollow, UserLike, GiftRecord
-from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest
+from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.translator import Translator
 
@@ -21,6 +21,17 @@ router = APIRouter(prefix="/api", tags=["users"])
 @router.get("/user/info")
 async def get_user_info(user: User = Depends(current_user_readonly)):
     """Get current user information."""
+    return {"code": 200, "data": user.to_dict()}
+
+@router.post("/user/update_info")
+async def update_user_info(data: UpdateUserInfoRequest, user: User = Depends(current_user)):
+    """Update current user information."""
+    if data.avatar:
+        user.avatar = data.avatar
+    if data.nickname:
+        user.nickname = data.nickname
+    if data.birthday:
+        user.birthday = data.birthday
     return {"code": 200, "data": user.to_dict()}
 
 

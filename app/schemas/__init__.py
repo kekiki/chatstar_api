@@ -3,7 +3,7 @@
 
 from .auth import GoogleUserInfo, GoogleAttribution, UserAgent, PasswordLoginRequest
 from .orders import CreateOrderRequest, VerifyGoogleRequest
-from .users import GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest
+from .users import GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from .tasks import TaskReportRequest, TaskReceiveRequest
 from .chat import SendMessageRequest
 
@@ -17,6 +17,7 @@ __all__ = [
     "DeleteAccountWithAccountPasswordRequest",
     "SetPasswordRequest",
     "UpdateFirebaseTokenRequest",
+    "UpdateUserInfoRequest",
     "PasswordLoginRequest",
     "TaskReportRequest",
     "TaskReceiveRequest",
