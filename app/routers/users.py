@@ -14,7 +14,7 @@ from app.models import Media, User, UserFollow, UserLike, GiftRecord
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.translator import Translator
-
+from app.r2_client import R2Client
 
 router = APIRouter(prefix="/api", tags=["users"])
 
@@ -23,7 +23,7 @@ async def get_user_info(user: User = Depends(current_user_readonly)):
     """Get current user information."""
     return {"code": 200, "data": user.to_dict()}
 
-@router.post("/user/update_info")
+@router.post("/user/updateInfo")
 async def update_user_info(data: UpdateUserInfoRequest, user: User = Depends(current_user)):
     """Update current user information."""
     if data.avatar:
@@ -34,6 +34,12 @@ async def update_user_info(data: UpdateUserInfoRequest, user: User = Depends(cur
         user.birthday = data.birthday
     return {"code": 200, "data": user.to_dict()}
 
+@router.get("/user/uploadUrl")
+async def get_upload_url(user: User = Depends(current_user_readonly), suffix: str = "png"):
+    """Get upload URL for user avatar."""
+    r2_client = R2Client()
+    resp = await r2_client.get_r2_upload_url(suffix)
+    return {"code": 200, "data": resp}
 
 @router.post("/user/googleAttribution")
 async def set_user_attribution(

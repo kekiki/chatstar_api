@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from app.config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, WORKER_API_URL, R2_PUBLIC_DOMAIN
 from app.tools import get_http_client
 from fastapi import HTTPException
-
+import mimetypes
 
 class R2Client:
     def __init__(self):
@@ -22,7 +22,15 @@ class R2Client:
         self.end_point = R2_ENDPOINT
         self.bucket_name = R2_BUCKET_NAME
 
-    async def get_r2_upload_url(self, file_name: str, content_type: str):
+    def get_content_type(self, file_path: str) -> str | None:
+        """根据文件路径/文件名获取Content‑Type"""
+        # strict=False 识别非标准后缀
+        content_type, _ = mimetypes.guess_type(file_path, strict=False)
+        return content_type
+
+    async def get_r2_upload_url(self, suffix: str):
+        file_name = self.generate_filename(suffix)
+        content_type = self.get_content_type(file_name)
         client = await get_http_client()
         resp = await client.post(
             WORKER_API_URL,
@@ -71,14 +79,11 @@ class R2Client:
         except ClientError:
             return False
 
-    def get_unique_key(self, origin_name: str) -> str:
-        if "." in origin_name:
-            ext = origin_name.split(".")[-1]
-            return f"{uuid.uuid4()}.{ext}"
-        return f"{uuid.uuid4()}"
+    def generate_filename(self, suffix: str) -> str:
+        return f"{uuid.uuid4()}.{suffix}"
 
-    async def upload_and_get_link(self, file_bytes: bytes, file_name: str, file_content_type: str) -> dict:
-        object_key = f'uploads/{self.get_unique_key(file_name)}'
+    async def upload_and_get_link(self, file_bytes: bytes, file_name: str) -> dict:
+        object_key = f'uploads/{self.generate_filename(file_name.split(".")[-1])}'
         public_url = await self.upload_bytes(file_bytes, object_key)
         return {
             "url": public_url,
