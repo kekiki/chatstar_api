@@ -3,7 +3,7 @@ import uuid
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from app.config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, WORKER_API_URL, R2_PUBLIC_DOMAIN
+from app.config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, R2_PUBLIC_DOMAIN
 from app.tools import get_http_client
 from fastapi import HTTPException
 import mimetypes
@@ -27,26 +27,32 @@ class R2Client:
         # strict=False 识别非标准后缀
         content_type, _ = mimetypes.guess_type(file_path, strict=False)
         return content_type
-
+    
     async def get_r2_upload_url(self, suffix: str):
-        file_name = self.generate_filename(suffix)
-        content_type = self.get_content_type(file_name)
-        client = await get_http_client()
-        resp = await client.post(
-            WORKER_API_URL,
-            headers={
-                "Content-Type": "application/json",
-            },
-            json={
-                "fileName": file_name,
-                "contentType": content_type
-            },
-            timeout=10
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=500, detail="获取R2上传直链失败")
+        try:
+            file_name = self.generate_filename(suffix)
+            object_key = f'uploads/{self.generate_filename(file_name.split(".")[-1])}'
+            # content_type = self.get_content_type(file_name)
 
-        return resp.json()
+            # 生成PUT预签名URL
+            upload_url = self.r2_client.generate_presigned_url(
+                ClientMethod="put_object",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": object_key,
+                    # ⚠️ 重要：这里不要写ContentType！
+                    # 如果在这里写content_type，前端PUT请求必须严格带上一模一样的Content‑Type，否则签名不匹配
+                },
+                ExpiresIn=3600,
+            )
+            public_url = f"{R2_PUBLIC_DOMAIN}/{object_key}"
+
+            return {
+                "upload_url": upload_url,
+                "public_url": public_url
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"生成预签名失败:{str(e)}")
 
     async def put_file_to_r2(self, upload_url, file_bytes, content_type):
         client = await get_http_client()
