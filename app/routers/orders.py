@@ -6,14 +6,14 @@ import logging
 import os
 from datetime import datetime
 import time
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_db_readonly
-from app.models import Order, User, Product, Task
+from app.models import Order, User, Product
 from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
 from app.tools import get_http_client
@@ -76,17 +76,6 @@ async def get_order(order_no: str, user: User = Depends(current_user_readonly), 
     return {"code": 200, "data": order.to_dict()}
 
 
-@router.get("/orders/user/{user_id}")
-async def get_orders_by_user(user_id: int, user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly)):
-    """Get all orders for a given user_id."""
-    if user_id != user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    result = await db.execute(select(Order).where(Order.user_id == user_id).order_by(Order.id.desc()))
-    rows: List[Order] = result.scalars().all()
-    items = [r.to_dict() for r in rows]
-    return {"code": 200, "data": items}
-
-
 @router.get("/user/orders")
 async def get_user_orders(
     user: User = Depends(current_user_readonly),
@@ -103,7 +92,16 @@ async def get_user_orders(
     )
     orders = result.scalars().all()
     items = [order.to_dict() for order in orders]
-    return {"code": 200, "data": {"items": items, "total": total, "page": page, "page_size": page_size}}
+    return {
+        "code": 200,
+        "data": {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+        },
+    }
 
 
 _cached_token = None
@@ -214,7 +212,6 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
         if user.total == 0:
             await add_task_progress(db, user.user_id, TYPE_FIRST_RECHARGE, 1)
         
-        # TODO: 更新用户余额和用户充值总钻石数
         user.balance = (user.balance or 0) + (product.diamonds or 0)
         user.total = (user.total or 0) + product.diamonds
         

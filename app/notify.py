@@ -6,7 +6,8 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.notification import NOTIFY_TYPES, Notification
+from app.models import Notification
+from app.models.notification import NOTIFY_TYPES
 from app.ws_manager import ws_manager
 
 

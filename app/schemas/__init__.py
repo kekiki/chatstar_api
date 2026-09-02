@@ -6,6 +6,7 @@ from .orders import CreateOrderRequest, VerifyGoogleRequest
 from .users import GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from .tasks import TaskReportRequest, TaskReceiveRequest
 from .chat import SendMessageRequest
+from .gifts import SendGiftRequest
 
 __all__ = [
     "GoogleUserInfo",
@@ -22,4 +23,5 @@ __all__ = [
     "TaskReportRequest",
     "TaskReceiveRequest",
     "SendMessageRequest",
+    "SendGiftRequest",
 ]
