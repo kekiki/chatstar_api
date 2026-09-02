@@ -13,8 +13,10 @@ from app.models.task import (
     CATEGORY_SIGNIN, CATEGORY_DAILY, CATEGORY_NEWCOMER,
     STATUS_DOING, STATUS_CLAIMABLE, STATUS_CLAIMED,
 )
+from app.models.transaction import ASSET_DIAMOND, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD, TRANSACTION_TASK
 from app.schemas import TaskReportRequest, TaskReceiveRequest
 from app.security import current_user
+from app.tools import add_transaction
 
 router = APIRouter(prefix="/api", tags=["tasks"])
 
@@ -29,12 +31,26 @@ def _reward_dict(task: Task) -> dict:
         "chat_card_num": task.chat_card_num or 0,
     }
 
+def _grant_reward(db: AsyncSession, user: User, task: Task) -> None:
+    reward_diamonds = (task.reward_diamonds or 0)
+    if reward_diamonds > 0:
+        user.balance = (user.balance or 0) + reward_diamonds
+        add_transaction(user.user_id, reward_diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_TASK, db=db)
 
-def _grant_reward(user: User, task: Task) -> None:
-    user.balance = (user.balance or 0) + (task.reward_diamonds or 0)
-    user.call_card_num = (user.call_card_num or 0) + (task.call_card_num or 0)
-    user.match_card_num = (user.match_card_num or 0) + (task.match_card_num or 0)
-    user.chat_card_num = (user.chat_card_num or 0) + (task.chat_card_num or 0)
+    call_card_num = (task.call_card_num or 0)
+    if call_card_num > 0:
+        user.call_card_num = (user.call_card_num or 0) + call_card_num
+        add_transaction(user.user_id, call_card_num, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_TASK, db=db)
+
+    match_card_num = (task.match_card_num or 0)
+    if match_card_num > 0:
+        user.match_card_num = (user.match_card_num or 0) + match_card_num
+        add_transaction(user.user_id, match_card_num, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_TASK, db=db)
+
+    chat_card_num = (task.chat_card_num or 0)
+    if chat_card_num > 0:
+        user.chat_card_num = (user.chat_card_num or 0) + chat_card_num
+        add_transaction(user.user_id, chat_card_num, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_TASK, db=db)
 
 
 async def _get_record(db: AsyncSession, user_id: int, task: Task, today: datetime.date) -> TaskRecord | None:
@@ -187,7 +203,7 @@ async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(
         task_date=today,
     )
     db.add(record)
-    _grant_reward(user, task)
+    _grant_reward(db,user, task)
 
     return {
         "code": 200,
@@ -226,6 +242,6 @@ async def receive_task_reward(data: TaskReceiveRequest, user: User = Depends(cur
 
     record.status = STATUS_CLAIMED
     record.updated_time = datetime.datetime.now()
-    _grant_reward(user, task)
+    _grant_reward(db, user, task)
 
     return {"code": 200, "data": {"reward": _reward_dict(task)}}

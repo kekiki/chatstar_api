@@ -13,5 +13,6 @@ from .task import Task, TaskRecord
 from .message import ChatMessage
 from .user_block import UserBlock
 from .user_report import UserReport
+from .transaction import Transaction
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport", "Transaction"]
