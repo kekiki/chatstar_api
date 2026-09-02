@@ -8,8 +8,8 @@ from datetime import datetime
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_db_readonly
@@ -85,6 +85,25 @@ async def get_orders_by_user(user_id: int, user: User = Depends(current_user_rea
     rows: List[Order] = result.scalars().all()
     items = [r.to_dict() for r in rows]
     return {"code": 200, "data": items}
+
+
+@router.get("/user/orders")
+async def get_user_orders(
+    user: User = Depends(current_user_readonly),
+    db: AsyncSession = Depends(get_db_readonly),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+):
+    """Get paginated orders for the current user, sorted by created_time desc."""
+    base_query = select(Order).where(Order.user_id == user.user_id)
+    total_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
+    total = total_result.scalar() or 0
+    result = await db.execute(
+        base_query.order_by(Order.created_time.desc()).offset((page - 1) * page_size).limit(page_size)
+    )
+    orders = result.scalars().all()
+    items = [order.to_dict() for order in orders]
+    return {"code": 200, "data": {"items": items, "total": total, "page": page, "page_size": page_size}}
 
 
 _cached_token = None
