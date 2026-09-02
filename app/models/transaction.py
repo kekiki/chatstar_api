@@ -13,7 +13,7 @@ ASSET_MATCH_CARD = 3  # 匹配卡交易
 ASSET_CHAT_CARD = 4   # 聊天卡交易
 
 # 交易类型
-TRANSACTION_TOPUP = 0  # 充值
+TRANSACTION_PURCHASE = 0  # 购买
 TRANSACTION_GIFT = 1  # 送礼
 TRANSACTION_CHAT = 2  # 聊天
 TRANSACTION_TASK = 3  # 任务奖励
@@ -26,7 +26,7 @@ class Transaction(Base):
     user_id = Column(Integer, index=True)
     amount = Column(Integer)
     asset_type = Column(Integer, default=ASSET_DIAMOND, index=True)  # 资产类型: 钻石、VIP、通话卡、匹配卡、聊天卡
-    transaction_type = Column(Integer, default=TRANSACTION_TOPUP, index=True)  # 交易类型: 0-充值，1-送礼，2-聊天，3-任务奖励
+    transaction_type = Column(Integer, default=TRANSACTION_PURCHASE, index=True)
     created_time = Column(DateTime, default=lambda: datetime.datetime.now())
 
     def to_dict(self):

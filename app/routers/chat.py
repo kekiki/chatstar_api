@@ -16,8 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import ALGORITHM, SECRET_KEY
 from app.database import AsyncSessionLocal, get_db, get_db_readonly
 from app.models import ChatMessage, Gift, User
+from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT
 from app.schemas import SendMessageRequest
 from app.security import current_user, current_user_readonly
+from app.tools import add_transaction
 from app.ws_manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -83,6 +85,9 @@ async def send_chat_message(
     return message
 
 
+CHAT_MESSAGE_DIAMOND_COST = 10
+
+
 @router.post("/chat/send")
 async def send_message(
     data: SendMessageRequest,
@@ -92,6 +97,16 @@ async def send_message(
     """Send a one-to-one chat message (text/image/video/gift)."""
     if data.receiver_id == user.user_id:
         raise HTTPException(400, "cannot send message to yourself")
+
+    if (user.chat_card_num or 0) > 0:
+        user.chat_card_num -= 1
+        add_transaction(user.user_id, 1, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_CHAT, db=db)
+    elif (user.balance or 0) >= CHAT_MESSAGE_DIAMOND_COST:
+        user.balance -= CHAT_MESSAGE_DIAMOND_COST
+        add_transaction(user.user_id, CHAT_MESSAGE_DIAMOND_COST, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CHAT, db=db)
+    else:
+        raise HTTPException(400, "Insufficient chat cards or diamonds")
+
     content = await _build_content(db, data)
     message = await send_chat_message(db, user.user_id, data.receiver_id, data.msg_type, content)
     return {"code": 200, "data": message.to_dict()}

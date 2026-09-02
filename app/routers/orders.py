@@ -14,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, get_db_readonly
 from app.models import Order, User, Product
+from app.models.transaction import ASSET_DIAMOND, ASSET_VIP, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD, TRANSACTION_PURCHASE
 from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
-from app.tools import get_http_client
+from app.tools import get_http_client, add_transaction
 from app.models.task import TYPE_RECHARGE_TIMES, TYPE_UNLOCK_VIP, TYPE_FIRST_RECHARGE
 
 logger = logging.getLogger("orders")
@@ -213,7 +214,28 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
             await add_task_progress(db, user.user_id, TYPE_FIRST_RECHARGE, 1)
         
         user.balance = (user.balance or 0) + (product.diamonds or 0)
+        if product.diamonds and product.diamonds > 0:
+            add_transaction(user.user_id, product.diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_PURCHASE, db=db)
         user.total = (user.total or 0) + product.diamonds
+
+        if product.vip_days and product.vip_days > 0:
+            now_ts = int(time.time())
+            current_expire = user.vip_expire_time or now_ts
+            base = max(current_expire, now_ts)
+            user.vip_expire_time = base + product.vip_days * 86400
+            add_transaction(user.user_id, product.vip_days, asset_type=ASSET_VIP, transaction_type=TRANSACTION_PURCHASE, db=db)
+
+        if product.call_card_num and product.call_card_num > 0:
+            user.call_card_num = (user.call_card_num or 0) + product.call_card_num
+            add_transaction(user.user_id, product.call_card_num, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_PURCHASE, db=db)
+
+        if product.match_card_num and product.match_card_num > 0:
+            user.match_card_num = (user.match_card_num or 0) + product.match_card_num
+            add_transaction(user.user_id, product.match_card_num, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_PURCHASE, db=db)
+
+        if product.chat_card_num and product.chat_card_num > 0:
+            user.chat_card_num = (user.chat_card_num or 0) + product.chat_card_num
+            add_transaction(user.user_id, product.chat_card_num, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_PURCHASE, db=db)
         
         from app.notify import push_notification
         await push_notification(
