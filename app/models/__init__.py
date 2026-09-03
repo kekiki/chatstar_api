@@ -14,6 +14,5 @@ from .message import ChatMessage
 from .user_block import UserBlock
 from .user_report import UserReport
 from .transaction import Transaction
-from .notification import Notification
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport", "Transaction", "Notification"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport", "Transaction"]

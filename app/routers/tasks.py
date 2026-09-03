@@ -35,22 +35,22 @@ def _grant_reward(db: AsyncSession, user: User, task: Task) -> None:
     reward_diamonds = (task.reward_diamonds or 0)
     if reward_diamonds > 0:
         user.balance = (user.balance or 0) + reward_diamonds
-        add_transaction(user.user_id, reward_diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_TASK, db=db)
+        add_transaction(user, reward_diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_TASK, db=db)
 
     call_card_num = (task.call_card_num or 0)
     if call_card_num > 0:
         user.call_card_num = (user.call_card_num or 0) + call_card_num
-        add_transaction(user.user_id, call_card_num, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_TASK, db=db)
+        add_transaction(user, call_card_num, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_TASK, db=db)
 
     match_card_num = (task.match_card_num or 0)
     if match_card_num > 0:
         user.match_card_num = (user.match_card_num or 0) + match_card_num
-        add_transaction(user.user_id, match_card_num, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_TASK, db=db)
+        add_transaction(user, match_card_num, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_TASK, db=db)
 
     chat_card_num = (task.chat_card_num or 0)
     if chat_card_num > 0:
         user.chat_card_num = (user.chat_card_num or 0) + chat_card_num
-        add_transaction(user.user_id, chat_card_num, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_TASK, db=db)
+        add_transaction(user, chat_card_num, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_TASK, db=db)
 
 
 async def _get_record(db: AsyncSession, user_id: int, task: Task, today: datetime.date) -> TaskRecord | None:

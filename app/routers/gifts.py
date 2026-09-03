@@ -44,7 +44,7 @@ async def send_gift(
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
     user.balance = (user.balance or 0) - total_cost
-    add_transaction(user.user_id, total_cost, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_GIFT, db=db)
+    add_transaction(user, total_cost, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_GIFT, db=db)
 
     record = GiftRecord(
         gift_id=gift.id,

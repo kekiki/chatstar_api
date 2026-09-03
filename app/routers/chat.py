@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ALGORITHM, SECRET_KEY
 from app.database import AsyncSessionLocal, get_db, get_db_readonly
-from app.models import ChatMessage, Gift, User
+from app.models import Gift, User, ChatMessage
 from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT
 from app.schemas import SendMessageRequest
 from app.security import current_user, current_user_readonly
@@ -61,30 +61,6 @@ async def _build_content(db: AsyncSession, data: SendMessageRequest) -> str:
     raise HTTPException(400, f"unsupported msg_type: {data.msg_type}")
 
 
-async def send_chat_message(
-    db: AsyncSession,
-    sender_id: int,
-    receiver_id: int,
-    msg_type: str,
-    content: str,
-) -> ChatMessage:
-    """Persist a message and push it to the receiver over WebSocket if online."""
-    message = ChatMessage(
-        msg_no=uuid.uuid4().hex,
-        sender_id=sender_id,
-        receiver_id=receiver_id,
-        msg_type=msg_type,
-        content=content,
-    )
-    db.add(message)
-    await db.flush()
-    # delivered = await ws_manager.send_to_user(receiver_id, "chat_message", message.to_dict())
-    # if delivered:
-    #     message.is_delivered = True
-    message.is_delivered = True
-    return message
-
-
 CHAT_MESSAGE_DIAMOND_COST = 10
 
 
@@ -100,70 +76,78 @@ async def send_message(
 
     if (user.chat_card_num or 0) > 0:
         user.chat_card_num -= 1
-        add_transaction(user.user_id, 1, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_CHAT, db=db)
+        add_transaction(user, 1, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_CHAT, db=db)
     elif (user.balance or 0) >= CHAT_MESSAGE_DIAMOND_COST:
         user.balance -= CHAT_MESSAGE_DIAMOND_COST
-        add_transaction(user.user_id, CHAT_MESSAGE_DIAMOND_COST, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CHAT, db=db)
+        add_transaction(user, CHAT_MESSAGE_DIAMOND_COST, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CHAT, db=db)
     else:
         raise HTTPException(400, "Insufficient chat cards or diamonds")
 
     content = await _build_content(db, data)
-    message = await send_chat_message(db, user.user_id, data.receiver_id, data.msg_type, content)
+    # message = await send_chat_message(db, user.user_id, data.receiver_id, data.msg_type, content)
+    message = ChatMessage(
+        msg_no=uuid.uuid4().hex,
+        sender_id=user.user_id,
+        receiver_id=data.receiver_id,
+        msg_type=data.msg_type,
+        content=content,
+    )
+    # TODO: AI异步回复消息
     return {"code": 200, "data": message.to_dict()}
 
 
-async def build_conversations(db: AsyncSession, user_id: int) -> list:
-    """Build recent conversations with last message and unread count."""
-    result = await db.execute(
-        select(ChatMessage)
-        .where(or_(ChatMessage.sender_id == user_id, ChatMessage.receiver_id == user_id))
-        .order_by(desc(ChatMessage.id))
-        .limit(1000)
-    )
-    convs = {}
-    for m in result.scalars().all():
-        peer_id = m.receiver_id if m.sender_id == user_id else m.sender_id
-        conv = convs.get(peer_id)
-        if not conv:
-            conv = {"peer_id": peer_id, "last_message": m.to_dict(), "unread_count": 0}
-            convs[peer_id] = conv
-        if m.receiver_id == user_id and not m.is_read:
-            conv["unread_count"] += 1
-    items = list(convs.values())
-    if items:
-        peer_result = await db.execute(select(User).where(User.user_id.in_([c["peer_id"] for c in items])))
-        peers = {u.user_id: u for u in peer_result.scalars().all()}
-        for conv in items:
-            peer = peers.get(conv["peer_id"])
-            if peer:
-                conv["nickname"] = peer.nickname
-                conv["avatar"] = peer.avatar
-                conv["is_anchor"] = peer.is_anchor
-    return items
+# async def build_conversations(db: AsyncSession, user_id: int) -> list:
+#     """Build recent conversations with last message and unread count."""
+#     result = await db.execute(
+#         select(ChatMessage)
+#         .where(or_(ChatMessage.sender_id == user_id, ChatMessage.receiver_id == user_id))
+#         .order_by(desc(ChatMessage.id))
+#         .limit(1000)
+#     )
+#     convs = {}
+#     for m in result.scalars().all():
+#         peer_id = m.receiver_id if m.sender_id == user_id else m.sender_id
+#         conv = convs.get(peer_id)
+#         if not conv:
+#             conv = {"peer_id": peer_id, "last_message": m.to_dict(), "unread_count": 0}
+#             convs[peer_id] = conv
+#         if m.receiver_id == user_id and not m.is_read:
+#             conv["unread_count"] += 1
+#     items = list(convs.values())
+#     if items:
+#         peer_result = await db.execute(select(User).where(User.user_id.in_([c["peer_id"] for c in items])))
+#         peers = {u.user_id: u for u in peer_result.scalars().all()}
+#         for conv in items:
+#             peer = peers.get(conv["peer_id"])
+#             if peer:
+#                 conv["nickname"] = peer.nickname
+#                 conv["avatar"] = peer.avatar
+#                 conv["is_anchor"] = peer.is_anchor
+#     return items
 
 
-@router.get("/chat/history")
-async def chat_history(
-    peer_id: int,
-    before_id: Optional[int] = None,
-    limit: int = Query(50, le=200),
-    user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
-):
-    """Get paginated message history with a peer, newest first."""
-    conds = [
-        or_(
-            and_(ChatMessage.sender_id == user.user_id, ChatMessage.receiver_id == peer_id),
-            and_(ChatMessage.sender_id == peer_id, ChatMessage.receiver_id == user.user_id),
-        )
-    ]
-    if before_id:
-        conds.append(ChatMessage.id < before_id)
-    result = await db.execute(
-        select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(limit)
-    )
-    messages = result.scalars().all()
-    return {"code": 200, "data": [m.to_dict() | {"user_id": peer_id, 'is_self_sent': m.sender_id == user.user_id} for m in messages]}
+# @router.get("/chat/history")
+# async def chat_history(
+#     peer_id: int,
+#     before_id: Optional[int] = None,
+#     limit: int = Query(50, le=200),
+#     user: User = Depends(current_user_readonly),
+#     db: AsyncSession = Depends(get_db_readonly),
+# ):
+#     """Get paginated message history with a peer, newest first."""
+#     conds = [
+#         or_(
+#             and_(ChatMessage.sender_id == user.user_id, ChatMessage.receiver_id == peer_id),
+#             and_(ChatMessage.sender_id == peer_id, ChatMessage.receiver_id == user.user_id),
+#         )
+#     ]
+#     if before_id:
+#         conds.append(ChatMessage.id < before_id)
+#     result = await db.execute(
+#         select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(limit)
+#     )
+#     messages = result.scalars().all()
+#     return {"code": 200, "data": [m.to_dict() | {"user_id": peer_id, 'is_self_sent': m.sender_id == user.user_id} for m in messages]}
 
 
 def _decode_ws_token(token: str) -> Optional[int]:
@@ -184,37 +168,37 @@ async def _handle_ws_action(user_id: int, raw: str) -> dict:
     action = frame.get("action")
     if action == "ping":
         return {"event": "pong", "data": {}}
-    if action == "read_messages":
-        data = frame.get("data") or {}
-        peer_id = data.get("peer_id")
-        if not peer_id:
-            return {"event": "error", "data": {"msg": "peer_id is required"}}
-        async with AsyncSessionLocal() as db:
-            try:
-                result = await db.execute(
-                    update(ChatMessage)
-                    .where(
-                        ChatMessage.receiver_id == user_id,
-                        ChatMessage.sender_id == int(peer_id),
-                        ChatMessage.is_read.is_(False),
-                    )
-                    .values(is_read=True)
-                )
-                await db.commit()
-                updated = result.rowcount
-            except Exception as e:
-                await db.rollback()
-                logger.exception("ws read_messages failed")
-                return {"event": "error", "data": {"msg": str(e)}}
-        return {"event": "read_ack", "data": {"peer_id": int(peer_id), "updated": updated}}
-    if action == "get_conversations":
-        async with AsyncSessionLocal() as db:
-            try:
-                items = await build_conversations(db, user_id)
-            except Exception as e:
-                logger.exception("ws get_conversations failed")
-                return {"event": "error", "data": {"msg": str(e)}}
-        return {"event": "conversations", "data": items}
+    # if action == "read_messages":
+    #     data = frame.get("data") or {}
+    #     peer_id = data.get("peer_id")
+    #     if not peer_id:
+    #         return {"event": "error", "data": {"msg": "peer_id is required"}}
+    #     async with AsyncSessionLocal() as db:
+    #         try:
+    #             result = await db.execute(
+    #                 update(ChatMessage)
+    #                 .where(
+    #                     ChatMessage.receiver_id == user_id,
+    #                     ChatMessage.sender_id == int(peer_id),
+    #                     ChatMessage.is_read.is_(False),
+    #                 )
+    #                 .values(is_read=True)
+    #             )
+    #             await db.commit()
+    #             updated = result.rowcount
+    #         except Exception as e:
+    #             await db.rollback()
+    #             logger.exception("ws read_messages failed")
+    #             return {"event": "error", "data": {"msg": str(e)}}
+    #     return {"event": "read_ack", "data": {"peer_id": int(peer_id), "updated": updated}}
+    # if action == "get_conversations":
+    #     async with AsyncSessionLocal() as db:
+    #         try:
+    #             items = await build_conversations(db, user_id)
+    #         except Exception as e:
+    #             logger.exception("ws get_conversations failed")
+    #             return {"event": "error", "data": {"msg": str(e)}}
+    #     return {"event": "conversations", "data": items}
     return {"event": "error", "data": {"msg": f"unknown action: {action}"}}
 
 

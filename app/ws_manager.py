@@ -10,6 +10,8 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
+WS_EVENT_SEND_CHAT_MESSAGE = 'ws_event_send_chat_message' #发送聊天消息
+WS_EVENT_USER_ASSETS_CHANGED = 'ws_event_user_assets_changed' #用户资产发生变化
 
 class ConnectionManager:
     """Manage active WebSocket connections keyed by user_id (multi-device supported)."""
