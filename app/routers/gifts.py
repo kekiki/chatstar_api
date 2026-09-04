@@ -21,25 +21,25 @@ async def get_gifts(user: User = Depends(current_user_readonly), db: AsyncSessio
     return {"code": 200, "data": items}
 
 
-@router.post("/user/gift/send")
+@router.post("/user/sendGift")
 async def send_gift(
     data: SendGiftRequest,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a gift to another user."""
-    if data.receiver_id == user.user_id:
+    if data.user_id == user.user_id:
         raise HTTPException(status_code=400, detail="Cannot send gift to yourself")
 
     gift = await db.get(Gift, data.gift_id)
     if not gift:
         raise HTTPException(status_code=404, detail="Gift not found")
 
-    receiver = await db.get(User, data.receiver_id)
+    receiver = await db.get(User, data.user_id)
     if not receiver:
         raise HTTPException(status_code=404, detail="Receiver not found")
 
-    total_cost = gift.gift_price * data.quantity
+    total_cost = gift.gift_price * data.num
     if (user.balance or 0) < total_cost:
         raise HTTPException(status_code=400, detail="Insufficient balance")
 

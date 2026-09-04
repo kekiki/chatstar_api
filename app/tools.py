@@ -24,7 +24,6 @@ async def add_transaction(user: User, amount: int, asset_type: int, transaction_
 
 async def send_userinfo_assets_notification(user: User):
     data = {
-        "user_id": user.user_id,
         "balance": user.balance,
         "is_vip": user.is_vip,
         "vip_expire_time": user.vip_expire_time,
