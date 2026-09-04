@@ -36,5 +36,5 @@ class Transaction(Base):
             "amount": self.amount,
             "asset_type": self.asset_type,
             "transaction_type": self.transaction_type,
-            "created_time": self.created_time,
+            "created_time": int(self.created_time.timestamp()),
         }
