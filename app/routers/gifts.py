@@ -35,7 +35,9 @@ async def send_gift(
     if not gift:
         raise HTTPException(status_code=404, detail="Gift not found")
 
-    receiver = await db.get(User, data.user_id)
+    result = await db.execute(select(User).where(User.user_id == data.user_id, User.is_review == user.is_review))
+    receiver = result.scalar_one_or_none()
+    # receiver = await db.get(User, data.user_id)
     if not receiver:
         raise HTTPException(status_code=404, detail="Receiver not found")
 
@@ -44,7 +46,7 @@ async def send_gift(
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
     user.balance = (user.balance or 0) - total_cost
-    add_transaction(user, total_cost, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_GIFT, db=db)
+    await add_transaction(user, total_cost, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_GIFT, db=db)
 
     record = GiftRecord(
         gift_id=gift.id,
@@ -57,11 +59,5 @@ async def send_gift(
 
     return {
         "code": 200,
-        "data": {
-            "gift_id": gift.id,
-            "gift_name": gift.gift_name,
-            "quantity": data.quantity,
-            "total_cost": total_cost,
-            "balance": user.balance,
-        },
+        "data": {},
     }
