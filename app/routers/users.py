@@ -10,7 +10,7 @@ import datetime
 from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
-from app.models import Media, User, UserFollow, UserLike, GiftRecord
+from app.models import Media, User, UserFollow, UserLike, GiftRecord, Gift
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.translator import Translator
@@ -211,11 +211,21 @@ async def get_user_detail(
         media_map.setdefault(media.user_id, []).append(media.to_dict())
 
     gift_result = await db.execute(
-        select(GiftRecord).where(GiftRecord.receiver_id == user.user_id)
+        select(GiftRecord, func.count(GiftRecord.id).label("num"))
+        .where(GiftRecord.receiver_id == user.user_id)
+        .group_by(GiftRecord.gift_id)
     )
     gift_map: dict[int, list] = {}
-    for gift in gift_result.scalars().all():
-        gift_map.setdefault(gift.receiver_id, []).append(gift.to_dict())
+    for gift_record, gift_num in gift_result.all():
+        gift = Gift(
+            id=gift_record.gift_id,
+            gift_name=gift_record.gift_name,
+            gift_icon=gift_record.gift_icon,
+            gift_price=gift_record.gift_price,
+        )
+        gift_dict = gift.to_dict()
+        gift_dict["num"] = gift_num
+        gift_map.setdefault(gift_record.receiver_id, []).append(gift_dict)
 
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(

@@ -66,17 +66,6 @@ async def create_order(request: Request, data: CreateOrderRequest, user: User = 
     await db.flush()
     return {"code": 200, "data": order.to_dict()}
 
-
-@router.get("/order/{order_no}")
-async def get_order(order_no: str, user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly)):
-    """Get an order by its order_no."""
-    result = await db.execute(select(Order).where(Order.order_no == order_no, Order.user_id == user.user_id))
-    order = result.scalar_one_or_none()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return {"code": 200, "data": order.to_dict()}
-
-
 @router.get("/user/orders")
 async def get_user_orders(
     user: User = Depends(current_user_readonly),

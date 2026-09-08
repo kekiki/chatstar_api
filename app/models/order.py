@@ -3,7 +3,7 @@ Order database model.
 """
 from sqlalchemy import Column, Integer, String
 from app.database import Base
-
+import datetime
 
 class Order(Base):
     """Order model for SQLAlchemy ORM."""
@@ -31,13 +31,21 @@ class Order(Base):
         return self.type == 2
 
     def to_dict(self):
+        is_failed = self.order_status != 1 and self.created_time < int((datetime.datetime.now() - datetime.timedelta(hours=1)).timestamp())
+        if is_failed:
+            self.order_status = 2
         return {
             "id": self.id,
+            "order_no": self.order_no,
             "transaction_no": self.transaction_no,
             "created_time": self.created_time,
+            "updated_time": self.updated_time,
             "sku": self.sku,
             "type": self.type,
             "order_status": self.order_status,
             "currency_code": self.currency_code,
             "currency_price": self.currency_price,
+            "pp_type": self.pp_type if len(self.pp_type) > 0 else 'Google',
         }
+
+

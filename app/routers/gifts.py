@@ -54,6 +54,9 @@ async def send_gift(
         sender_name=user.nickname,
         sender_avatar=user.avatar,
         receiver_id=receiver.user_id,
+        gift_name=gift.gift_name,
+        gift_icon=gift.gift_icon,
+        gift_price=gift.gift_price,
     )
     db.add(record)
 
