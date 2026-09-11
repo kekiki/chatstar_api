@@ -211,21 +211,34 @@ async def get_user_detail(
         media_map.setdefault(media.user_id, []).append(media.to_dict())
 
     gift_result = await db.execute(
-        select(GiftRecord, func.count(GiftRecord.id).label("num"))
+        select(
+            GiftRecord.gift_id,
+            GiftRecord.gift_name,
+            GiftRecord.gift_icon,
+            GiftRecord.gift_price,
+            GiftRecord.receiver_id,
+            func.count(GiftRecord.id).label("num"),
+        )
         .where(GiftRecord.receiver_id == user.user_id)
-        .group_by(GiftRecord.gift_id)
+        .group_by(
+            GiftRecord.gift_id,
+            GiftRecord.gift_name,
+            GiftRecord.gift_icon,
+            GiftRecord.gift_price,
+            GiftRecord.receiver_id,
+        )
     )
     gift_map: dict[int, list] = {}
-    for gift_record, gift_num in gift_result.all():
+    for gift_id, gift_name, gift_icon, gift_price, receiver_id, gift_num in gift_result.all():
         gift = Gift(
-            id=gift_record.gift_id,
-            gift_name=gift_record.gift_name,
-            gift_icon=gift_record.gift_icon,
-            gift_price=gift_record.gift_price,
+            id=gift_id,
+            gift_name=gift_name,
+            gift_icon=gift_icon,
+            gift_price=gift_price,
         )
         gift_dict = gift.to_dict()
         gift_dict["num"] = gift_num
-        gift_map.setdefault(gift_record.receiver_id, []).append(gift_dict)
+        gift_map.setdefault(receiver_id, []).append(gift_dict)
 
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(

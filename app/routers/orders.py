@@ -205,7 +205,7 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
         user.balance = (user.balance or 0) + (product.diamonds or 0)
         if product.diamonds and product.diamonds > 0:
             add_transaction(user, product.diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_PURCHASE, db=db)
-        user.total = (user.total or 0) + product.diamonds
+            user.total = (user.total or 0) + product.diamonds
 
         if product.vip_days and product.vip_days > 0:
             now_ts = int(time.time())
