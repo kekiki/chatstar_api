@@ -174,7 +174,10 @@ async def get_users(
         anchor_dict["media_list"] = media_map.get(anchor.user_id, [])
         anchor_dict["is_hot"] = anchor.fans_count > 10000
         anchor_dict["is_new"] = anchor.created_time is not None and anchor.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
-        anchor_dict["online_status"] = 1 if anchor.is_review else 0
+        if user.is_review:
+            anchor_dict["online_status"] = 0
+        else:
+            anchor_dict["online_status"] = 1 if anchor.is_review else 0
         anchor_dict["is_followed"] = anchor.user_id in followed_ids
         anchor_dict["is_liked"] = anchor.user_id in liked_ids
         items.append(anchor_dict)
@@ -193,10 +196,10 @@ async def get_users(
 @router.get("/user/getUserDetail")
 async def get_user_detail(
     user_id: int,
-    user: User = Depends(current_user_readonly),
+    current_user: User = Depends(current_user_readonly),
     db: AsyncSession = Depends(get_db_readonly)
 ):  
-    result = await db.execute(select(User).where(User.user_id == user_id, User.is_review == user.is_review))
+    result = await db.execute(select(User).where(User.user_id == user_id, User.is_review == current_user.is_review))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -226,7 +229,7 @@ async def get_user_detail(
             GiftRecord.gift_icon,
             GiftRecord.gift_price,
             GiftRecord.receiver_id,
-        )
+        ).order_by(GiftRecord.gift_price.desc())
     )
     gift_map: dict[int, list] = {}
     for gift_id, gift_name, gift_icon, gift_price, receiver_id, gift_num in gift_result.all():
@@ -261,7 +264,10 @@ async def get_user_detail(
     anchor_dict["gift_list"] = gift_map.get(user.user_id, [])
     anchor_dict["is_hot"] = user.fans_count > 10000
     anchor_dict["is_new"] = user.created_time is not None and user.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
-    anchor_dict["online_status"] = 1 if user.is_review else 0
+    if current_user.is_review:
+        anchor_dict["online_status"] = 0
+    else:
+        anchor_dict["online_status"] = 1 if user.is_review else 0
     anchor_dict["is_followed"] = user.user_id in followed_ids
     anchor_dict["is_liked"] = user.user_id in liked_ids
     return {"code": 200, "data": anchor_dict}
