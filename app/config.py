@@ -17,10 +17,11 @@ def get_env(key: str) -> str:
     return val
 
 ENV_MODE = get_env("ENV_MODE")
+IS_DEBUG = True #ENV_MODE == "develop"
 
-if ENV_MODE == "develop":
+if IS_DEBUG:
     print("本地开发环境")
-elif ENV_MODE == "production":
+else:
     print("线上生产环境")
 
 # ===================== 自动读取 Railway 环境变量 =====================
@@ -42,3 +43,6 @@ R2_ACCOUNT_ID = get_env('R2_ACCOUNT_ID')
 R2_BUCKET_NAME = get_env('R2_BUCKET_NAME')
 R2_ENDPOINT = get_env('R2_ENDPOINT')
 R2_PUBLIC_DOMAIN = get_env('R2_PUBLIC_DOMAIN')
+
+# GROQ AI
+GROQ_API_KEY = get_env('GROQ_API_KEY')

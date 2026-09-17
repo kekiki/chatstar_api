@@ -49,9 +49,9 @@ async def send_chat_message(
         msg_type=msg_type,
         content=content,
     )
-    # db.add(message)
-    # await db.flush()
-    delivered = await ws_manager.send_to_user(receiver_id, WS_EVENT_SEND_CHAT_MESSAGE, message.to_dict())
+    db.add(message)
+    await db.flush()
+    delivered = await ws_manager.send_to_user(receiver_id, WS_EVENT_SEND_CHAT_MESSAGE, message.to_dict() | {'user_id': sender_id})
     if delivered:
         message.is_delivered = True
     return message

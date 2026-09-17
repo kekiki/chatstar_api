@@ -16,3 +16,5 @@ python-dotenv
 greenlet
 googletrans-py==4.0.0
 requests
+groq
+pydantic

@@ -40,6 +40,7 @@ class ConnectionManager:
         sockets = list(self._connections.get(user_id) or ())
         if not sockets:
             return 0
+
         payload = json.dumps({"event": event, "data": data}, ensure_ascii=False)
         delivered = 0
         stale = []

@@ -6,21 +6,23 @@ import asyncio
 import json
 import logging
 import uuid
+import random
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, BackgroundTasks
 from jose import JWTError, jwt
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import ALGORITHM, SECRET_KEY
+from app.config import ALGORITHM, SECRET_KEY, IS_DEBUG
 from app.database import AsyncSessionLocal, get_db, get_db_readonly
 from app.models import Gift, User, ChatMessage
 from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT
 from app.schemas import SendMessageRequest
 from app.security import current_user, current_user_readonly
-from app.tools import add_transaction
+from app.tools import add_transaction, send_chat_message
 from app.ws_manager import ws_manager
+from app.greq_client import groq_client
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +41,8 @@ async def _build_content(db: AsyncSession, data: SendMessageRequest) -> str:
         if not data.media_url:
             raise HTTPException(400, f"media_url is required for {data.msg_type} message")
         payload = {
-            "url": data.media_url,
-            "cover": data.media_cover,
+            "media_url": data.media_url,
+            "media_cover": data.media_cover,
         }
         return json.dumps({k: v for k, v in payload.items() if v is not None}, ensure_ascii=False)
     if data.msg_type == "gift":
@@ -67,6 +69,7 @@ CHAT_MESSAGE_DIAMOND_COST = 10
 @router.post("/chat/send")
 async def send_message(
     data: SendMessageRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -84,7 +87,6 @@ async def send_message(
         raise HTTPException(400, "Insufficient chat cards or diamonds")
 
     content = await _build_content(db, data)
-    # message = await send_chat_message(db, user.user_id, data.receiver_id, data.msg_type, content)
     message = ChatMessage(
         msg_no=uuid.uuid4().hex,
         sender_id=user.user_id,
@@ -92,8 +94,54 @@ async def send_message(
         msg_type=data.msg_type,
         content=content,
     )
-    # TODO: AI异步回复消息
+
+    if data.msg_type == "text":
+        print('start task')
+        # AI异步回复消息
+        background_tasks.add_task(background_chat_task, db=db, message=message)
+    else:
+        db.add(message)
+        db.flush()
+
     return {"code": 200, "data": message.to_dict()}
+
+
+async def background_chat_task(db: AsyncSession, message: ChatMessage):
+    try:
+        delay_sec = random.uniform(5, 30)
+        await asyncio.sleep(delay_sec)
+
+        result = await db.execute(select(User).where(User.user_id == message.receiver_id))
+        user = result.scalar_one_or_none()
+
+        lang_code = user.language_code
+        role_desc = f"You are {user.nickname}, a bright and lovely {user.age}-year-old girl, short answers."
+
+        conds = [
+                or_(
+                    and_(ChatMessage.sender_id == message.sender_id, ChatMessage.receiver_id == message.receiver_id),
+                    and_(ChatMessage.sender_id == message.receiver_id, ChatMessage.receiver_id == message.sender_id),
+                )
+            ]
+        result = await db.execute(
+            select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(6)
+        )
+        messages = result.scalars().all()
+        history_msgs = []
+        for r in messages:
+            if r.msg_type == 'text':
+                role = 'assistant' if r.sender_id != message.sender_id else 'user'
+                history_msgs.append({"role": role, "content": r.content})
+
+        reply_text = await groq_client.chat_endpoint(content=message.content, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
+
+        db.add(message)
+        if reply_text and len(reply_text) > 0:
+            await send_chat_message(db=db, sender_id=message.receiver_id, receiver_id=message.sender_id, msg_type='text', content=reply_text)
+    except Exception as e:
+        logger.warning(f"Background task error: {str(e)}")
+        db.add(message)
+        db.flush()
 
 
 # async def build_conversations(db: AsyncSession, user_id: int) -> list:
