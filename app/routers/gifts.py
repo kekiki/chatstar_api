@@ -1,16 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+import logging
+import random
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db, get_db_readonly
+from app.database import AsyncSessionLocal, get_db, get_db_readonly
 from app.models import Gift, GiftRecord, User
 from app.models.transaction import ASSET_DIAMOND, TRANSACTION_GIFT
 from app.schemas import SendGiftRequest
 from app.security import current_user, current_user_readonly
-from app.tools import add_transaction
+from app.tools import add_transaction, send_chat_message
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["gifts"])
 
+GIFT_REPLY_MESSAGES = [
+    "Thanks",
+    "Thank you",
+    "Thanks❤️",
+    "Thank you❤️",
+    "Thanks😘",
+    "Thank you😘",
+    "Thank you very much",
+    "🌹🌹🌹",
+    "Thank you for your gift.",
+    "Thanks for your present.",
+    "❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️",
+    "😘😘😘😘😘😘"
+]
 
 @router.get("/user/gifts")
 async def get_gifts(user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly)):
@@ -24,6 +44,7 @@ async def get_gifts(user: User = Depends(current_user_readonly), db: AsyncSessio
 @router.post("/user/sendGift")
 async def send_gift(
     data: SendGiftRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -59,8 +80,29 @@ async def send_gift(
         gift_price=gift.gift_price,
     )
     db.add(record)
+    await db.flush()
+
+    gift_sender_id = user.user_id
+    anchor_id = receiver.user_id
+
+    await db.commit()
+
+    background_tasks.add_task(background_chat_task, sender_id=anchor_id, receiver_id=gift_sender_id)
 
     return {
         "code": 200,
         "data": {},
     }
+
+
+async def background_chat_task(sender_id: int, receiver_id: int):
+    try:
+        delay_sec = random.uniform(5, 20)
+        await asyncio.sleep(delay_sec)
+
+        reply_text = random.choice(GIFT_REPLY_MESSAGES)
+        async with AsyncSessionLocal() as db:
+            await send_chat_message(db=db, sender_id=sender_id, receiver_id=receiver_id, msg_type='text', content=reply_text)
+            await db.commit()
+    except Exception as e:
+        logger.exception("sendGift background chat task failed: %s", e)

@@ -95,53 +95,62 @@ async def send_message(
         content=content,
     )
 
+    db.add(message)
+    await db.flush()
+
+    sender_id = user.user_id
+    receiver_id = data.receiver_id
+    message_dict = message.to_dict()
+    before_id = message.id
+
+    await db.commit()
+
     if data.msg_type == "text":
-        print('start task')
         # AI异步回复消息
-        background_tasks.add_task(background_chat_task, db=db, message=message)
-    else:
-        db.add(message)
-        db.flush()
+        background_tasks.add_task(background_chat_task, sender_id=sender_id, receiver_id=receiver_id, content=content, before_id=before_id)
 
-    return {"code": 200, "data": message.to_dict()}
+    return {"code": 200, "data": message_dict}
 
 
-async def background_chat_task(db: AsyncSession, message: ChatMessage):
+async def background_chat_task(sender_id: int, receiver_id: int, content: str, before_id: int):
     try:
         delay_sec = random.uniform(5, 30)
         await asyncio.sleep(delay_sec)
 
-        result = await db.execute(select(User).where(User.user_id == message.receiver_id))
-        user = result.scalar_one_or_none()
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.user_id == receiver_id))
+            anchor = result.scalar_one_or_none()
+            if not anchor:
+                logger.warning("AI reply skipped, receiver not found user_id=%s", receiver_id)
+                return
 
-        lang_code = user.language_code
-        role_desc = f"You are {user.nickname}, a bright and lovely {user.age}-year-old girl, short answers."
+            lang_code = anchor.language_code
+            role_desc = f"You are {anchor.nickname}, a bright and lovely {anchor.age}-year-old girl, short answers."
 
-        conds = [
+            conds = [
                 or_(
-                    and_(ChatMessage.sender_id == message.sender_id, ChatMessage.receiver_id == message.receiver_id),
-                    and_(ChatMessage.sender_id == message.receiver_id, ChatMessage.receiver_id == message.sender_id),
-                )
+                    and_(ChatMessage.sender_id == sender_id, ChatMessage.receiver_id == receiver_id),
+                    and_(ChatMessage.sender_id == receiver_id, ChatMessage.receiver_id == sender_id),
+                ),
+                ChatMessage.id < before_id,
             ]
-        result = await db.execute(
-            select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(6)
-        )
-        messages = result.scalars().all()
-        history_msgs = []
-        for r in messages:
-            if r.msg_type == 'text':
-                role = 'assistant' if r.sender_id != message.sender_id else 'user'
-                history_msgs.append({"role": role, "content": r.content})
+            result = await db.execute(
+                select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(6)
+            )
+            messages = result.scalars().all()
+            history_msgs = []
+            for r in messages:
+                if r.msg_type == 'text':
+                    role = 'assistant' if r.sender_id != sender_id else 'user'
+                    history_msgs.append({"role": role, "content": r.content})
 
-        reply_text = await groq_client.chat_endpoint(content=message.content, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
+            reply_text = await groq_client.chat_endpoint(content=content, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
 
-        db.add(message)
-        if reply_text and len(reply_text) > 0:
-            await send_chat_message(db=db, sender_id=message.receiver_id, receiver_id=message.sender_id, msg_type='text', content=reply_text)
+            if reply_text and len(reply_text) > 0:
+                await send_chat_message(db=db, sender_id=receiver_id, receiver_id=sender_id, msg_type='text', content=reply_text)
+            await db.commit()
     except Exception as e:
-        logger.warning(f"Background task error: {str(e)}")
-        db.add(message)
-        db.flush()
+        logger.exception("chat AI reply background task failed: %s", e)
 
 
 # async def build_conversations(db: AsyncSession, user_id: int) -> list:

@@ -145,12 +145,12 @@ async def get_users(
 
     anchor_user_ids = [a.user_id for a in anchors]
 
-    media_result = await db.execute(
-        select(Media).where(Media.user_id.in_(anchor_user_ids), Media.video_type == 0)
-    )
-    media_map: dict[int, list] = {}
-    for media in media_result.scalars().all():
-        media_map.setdefault(media.user_id, []).append(media.to_dict())
+    # media_result = await db.execute(
+    #     select(Media).where(Media.user_id.in_(anchor_user_ids), Media.video_type == 0)
+    # )
+    # media_map: dict[int, list] = {}
+    # for media in media_result.scalars().all():
+    #     media_map.setdefault(media.user_id, []).append(media.to_dict())
 
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(
@@ -171,8 +171,8 @@ async def get_users(
     items = []
     for anchor in anchors:
         anchor_dict = anchor.to_dict()
-        anchor_dict["media_list"] = media_map.get(anchor.user_id, [])
-        anchor_dict["is_hot"] = anchor.fans_count > 10000
+        # anchor_dict["media_list"] = media_map.get(anchor.user_id, [])
+        anchor_dict["is_hot"] = anchor.fans_count > 100
         anchor_dict["is_new"] = anchor.created_time is not None and anchor.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
         if user.is_review:
             anchor_dict["online_status"] = 0
