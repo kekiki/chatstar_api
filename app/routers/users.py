@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select
 
+import random
 import datetime
 from typing import Literal, Optional
 
@@ -73,7 +74,8 @@ async def delete_account(user: User = Depends(current_user), db: AsyncSession = 
 @router.post("/user/deleteAccountWithAccountPassword")
 async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Delete account with user_id and password."""
-    user = await db.get(User, data.user_id)
+    result = await db.execute(select(User).where(User.user_id == data.user_id))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -169,6 +171,7 @@ async def get_users(
     liked_ids = set(liked_result.scalars().all())
 
     items = []
+    random.shuffle(anchors)
     for anchor in anchors:
         anchor_dict = anchor.to_dict()
         # anchor_dict["media_list"] = media_map.get(anchor.user_id, [])
@@ -245,7 +248,7 @@ async def get_user_detail(
 
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(
-            UserFollow.user_id == user.user_id,
+            UserFollow.user_id == current_user.user_id,
             UserFollow.follow_user_id.in_(anchor_user_ids),
         )
     )
@@ -253,7 +256,7 @@ async def get_user_detail(
 
     liked_result = await db.execute(
         select(UserLike.like_user_id).where(
-            UserLike.user_id == user.user_id,
+            UserLike.user_id == current_user.user_id,
             UserLike.like_user_id.in_(anchor_user_ids),
         )
     )

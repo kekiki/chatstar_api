@@ -7,6 +7,7 @@ from .users import GoogleTranslateRequest, DeleteAccountWithAccountPasswordReque
 from .tasks import TaskReportRequest, TaskReceiveRequest
 from .chat import SendMessageRequest
 from .gifts import SendGiftRequest
+from .social import TargetUserRequest, ReportUserRequest
 
 __all__ = [
     "GoogleUserInfo",
@@ -24,4 +25,6 @@ __all__ = [
     "TaskReceiveRequest",
     "SendMessageRequest",
     "SendGiftRequest",
+    "TargetUserRequest",
+    "ReportUserRequest",
 ]

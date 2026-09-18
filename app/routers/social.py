@@ -2,12 +2,15 @@
 Social interaction routes: follow, block, like, report, and list endpoints.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select, and_
 
 from app.database import get_db, get_db_readonly
 from app.models import User, UserFollow, UserLike, UserBlock, UserReport
+from app.schemas import ReportUserRequest, TargetUserRequest
 from app.security import current_user, current_user_readonly
 from app.routers.tasks import add_task_progress
 from app.models.task import TYPE_FOLLOW_USERS
@@ -15,17 +18,41 @@ from app.models.task import TYPE_FOLLOW_USERS
 router = APIRouter(prefix="/api", tags=["social"])
 
 
+def _resolve_target_user_id(data: Optional[TargetUserRequest], fallback: Optional[int]) -> int:
+    value = data.target_user_id if data is not None and data.target_user_id is not None else fallback
+    if value is None:
+        raise HTTPException(status_code=422, detail="target_user_id is required")
+    return value
+
+
+async def _get_target_user(db: AsyncSession, user: User, target_user_id: int) -> User:
+    result = await db.execute(
+        select(User).where(User.user_id == target_user_id)
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    return target
+
+
+async def _find_user_by_id(db: AsyncSession, target_user_id: int) -> Optional[User]:
+    result = await db.execute(select(User).where(User.user_id == target_user_id))
+    return result.scalar_one_or_none()
+
+
 # ===================== Follow =====================
 
 @router.post("/user/follow")
 async def follow_user(
-    target_user_id: int = Query(..., description="User ID to follow"),
+    data: Optional[TargetUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to follow"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
         return {"code": 400, "msg": "Cannot follow yourself"}
-    target = await db.get(User, target_user_id)
+    target = await _get_target_user(db, user, target_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     existing = (await db.execute(
@@ -44,10 +71,12 @@ async def follow_user(
 
 @router.post("/user/unfollow")
 async def unfollow_user(
-    target_user_id: int = Query(..., description="User ID to unfollow"),
+    data: Optional[TargetUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to unfollow"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
     result = await db.execute(
         select(UserFollow).where(
             UserFollow.user_id == user.user_id,
@@ -60,7 +89,7 @@ async def unfollow_user(
     await db.delete(follow)
     if user.follow_count > 0:
         user.follow_count -= 1
-    target = await db.get(User, target_user_id)
+    target = await _find_user_by_id(db, target_user_id)
     if target and target.fans_count > 0:
         target.fans_count -= 1
     return {"code": 200, "msg": "success"}
@@ -70,13 +99,15 @@ async def unfollow_user(
 
 @router.post("/user/block")
 async def block_user(
-    target_user_id: int = Query(..., description="User ID to block"),
+    data: Optional[TargetUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to block"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
         return {"code": 400, "msg": "Cannot block yourself"}
-    target = await db.get(User, target_user_id)
+    target = await _get_target_user(db, user, target_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     existing = (await db.execute(
@@ -93,10 +124,12 @@ async def block_user(
 
 @router.post("/user/unblock")
 async def unblock_user(
-    target_user_id: int = Query(..., description="User ID to unblock"),
+    data: Optional[TargetUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to unblock"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
     result = await db.execute(
         select(UserBlock).where(
             UserBlock.user_id == user.user_id,
@@ -154,13 +187,15 @@ async def get_my_blocks(
 
 @router.post("/user/like")
 async def like_user(
-    target_user_id: int = Query(..., description="User ID to like"),
+    data: Optional[TargetUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to like"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
         return {"code": 400, "msg": "Cannot like yourself"}
-    target = await db.get(User, target_user_id)
+    target = await _get_target_user(db, user, target_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     existing = (await db.execute(
@@ -178,10 +213,12 @@ async def like_user(
 
 @router.post("/user/unlike")
 async def unlike_user(
-    target_user_id: int = Query(..., description="User ID to unlike"),
+    data: Optional[TargetUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to unlike"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
     result = await db.execute(
         select(UserLike).where(
             UserLike.user_id == user.user_id,
@@ -192,7 +229,7 @@ async def unlike_user(
     if not like:
         return {"code": 400, "msg": "Not liked"}
     await db.delete(like)
-    target = await db.get(User, target_user_id)
+    target = await _find_user_by_id(db, target_user_id)
     if target and target.like_count > 0:
         target.like_count -= 1
     return {"code": 200, "msg": "success"}
@@ -202,14 +239,17 @@ async def unlike_user(
 
 @router.post("/user/report")
 async def report_user(
-    target_user_id: int = Query(..., description="User ID to report"),
+    data: Optional[ReportUserRequest] = None,
+    target_user_id: Optional[int] = Query(default=None, description="User ID to report"),
     reason: str = Query(default="", max_length=255, description="Report reason"),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    target_user_id = _resolve_target_user_id(data, target_user_id)
+    reason = data.reason if data is not None else reason
     if user.user_id == target_user_id:
         return {"code": 400, "msg": "Cannot report yourself"}
-    target = await db.get(User, target_user_id)
+    target = await _get_target_user(db, user, target_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     db.add(UserReport(user_id=user.user_id, report_user_id=target_user_id, reason=reason))
@@ -242,6 +282,10 @@ async def get_my_follows(
     for follow_row, followed_user in rows:
         d = followed_user.to_dict()
         d["followed_at"] = follow_row.created_time.isoformat() if follow_row.created_time else None
+        if user.is_review:
+            d["online_status"] = 0
+        else:
+            d["online_status"] = 1 if followed_user.is_review else 0
         items.append(d)
 
     return {
@@ -293,6 +337,10 @@ async def get_my_fans(
         d = fan_user.to_dict()
         d["fans_at"] = follow_row.created_time.isoformat() if follow_row.created_time else None
         d["is_liked"] = fan_user.user_id in liked_ids
+        if user.is_review:
+            d["online_status"] = 0
+        else:
+            d["online_status"] = 1 if fan_user.is_review else 0
         items.append(d)
 
     return {
@@ -344,6 +392,10 @@ async def get_my_likers(
         d = liker_user.to_dict()
         d["liked_at"] = like_row.created_time.isoformat() if like_row.created_time else None
         d["is_followed"] = liker_user.user_id in followed_ids
+        if user.is_review:
+            d["online_status"] = 0
+        else:
+            d["online_status"] = 1 if liker_user.is_review else 0
         items.append(d)
 
     return {
