@@ -17,6 +17,8 @@ TRANSACTION_PURCHASE = 0  # 购买
 TRANSACTION_GIFT = 1  # 送礼
 TRANSACTION_CHAT = 2  # 聊天
 TRANSACTION_TASK = 3  # 任务奖励
+TRANSACTION_CALL = 4  # 通话
+TRANSACTION_MATCH = 5  # 匹配
 
 class Transaction(Base):
     """Transaction model for SQLAlchemy ORM."""
