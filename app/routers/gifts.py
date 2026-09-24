@@ -64,7 +64,7 @@ async def send_gift(
 
     total_cost = gift.gift_price * data.num
     if (user.balance or 0) < total_cost:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+        raise HTTPException(status_code=2001, detail="Insufficient balance")
 
     user.balance = (user.balance or 0) - total_cost
     await add_transaction(user, -total_cost, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_GIFT, db=db)

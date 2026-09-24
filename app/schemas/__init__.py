@@ -8,7 +8,7 @@ from .tasks import TaskReportRequest, TaskReceiveRequest
 from .chat import SendMessageRequest
 from .gifts import SendGiftRequest
 from .social import TargetUserRequest, ReportUserRequest
-from .calls import CreateCallRequest
+from .calls import CreateCallRequest, RenewCallRequest, HangupCallRequest
 
 __all__ = [
     "GoogleUserInfo",
@@ -29,4 +29,6 @@ __all__ = [
     "TargetUserRequest",
     "ReportUserRequest",
     "CreateCallRequest",
+    "RenewCallRequest",
+    "HangupCallRequest",
 ]

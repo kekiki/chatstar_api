@@ -51,7 +51,7 @@ async def follow_user(
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
-        return {"code": 400, "msg": "Cannot follow yourself"}
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
     target = await _get_target_user(db, user, target_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")

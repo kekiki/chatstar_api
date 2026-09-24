@@ -84,7 +84,7 @@ async def send_message(
         user.balance -= CHAT_MESSAGE_DIAMOND_COST
         await add_transaction(user, -CHAT_MESSAGE_DIAMOND_COST, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CHAT, db=db)
     else:
-        raise HTTPException(400, "Insufficient chat cards or diamonds")
+        raise HTTPException(2001, "Insufficient balance")
 
     content = await _build_content(db, data)
     message = ChatMessage(

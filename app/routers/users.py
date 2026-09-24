@@ -110,7 +110,8 @@ async def get_users(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ):
-    query = select(User).where(User.is_anchor == True, User.is_review == user.is_review)
+    # query = select(User).where(User.is_anchor == True, User.is_review == user.is_review)
+    query = select(User).where(User.is_anchor == True)
 
     if country:
         query = query.where(User.country == country)
@@ -121,7 +122,7 @@ async def get_users(
     sort_column = getattr(User, sort_by)
     query = query.order_by(desc(sort_column))
 
-    count_query = select(func.count()).select_from(User).where(User.is_anchor == True, User.is_review == user.is_review)
+    count_query = select(func.count()).select_from(User).where(User.is_anchor == True)
     if country:
         count_query = count_query.where(User.country == country)
     if language_code:
@@ -202,7 +203,7 @@ async def get_user_detail(
     current_user: User = Depends(current_user_readonly),
     db: AsyncSession = Depends(get_db_readonly)
 ):  
-    result = await db.execute(select(User).where(User.user_id == user_id, User.is_review == current_user.is_review))
+    result = await db.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
