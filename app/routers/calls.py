@@ -8,6 +8,8 @@ from app.models.transaction import ASSET_DIAMOND, ASSET_MATCH_CARD, ASSET_CALL_C
 from app.database import get_db, get_db_readonly
 from app.security import current_user, current_user_readonly
 from app.tools import add_transaction
+from app.routers.tasks import add_task_progress
+from app.models.task import TYPE_MATCH_TIMES, TYPE_ACTIVE_CALL
 
 import random
 import datetime
@@ -25,15 +27,19 @@ CALL_TYPE_MATCH=3
 @router.post("/call/create")
 async def createCall(
     data: CreateCallRequest,
-    user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly)
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Create a call."""
     if data.peer_id == user.user_id:
         raise HTTPException(status_code=400, detail="Cannot create call to yourself")
 
+    used_card = False
     if data.call_type == CALL_TYPE_MATCH:
+        await add_task_progress(db, user.user_id, TYPE_MATCH_TIMES, 1)
+
         if user.match_card_num > 0:
+            used_card = True
             user.match_card_num = user.match_card_num - 1
             await add_transaction(user, -1, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_MATCH, db=db)
         elif (user.balance or 0) >= CREATE_MATCH_PRICE:
@@ -45,6 +51,7 @@ async def createCall(
         media_result = await db.execute(select(Media).where(Media.video_type == 1, Media.is_video == True))
     else:
         if user.call_card_num > 0:
+            used_card = True
             user.call_card_num = user.call_card_num - 1
             await add_transaction(user, -1, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_CALL, db=db)
         elif (user.balance or 0) >= CREATE_CALL_PRICE:
@@ -71,7 +78,7 @@ async def createCall(
 
     return {
         "code": 200,
-        "data": call.to_dict(),
+        "data": call.to_dict() | {'used_card': used_card},
     }
 
 
@@ -117,6 +124,9 @@ async def endCall(
 
     call.is_ended = True
     call.updated_time = datetime.datetime.now()
+
+    if call.call_type == CALL_TYPE_CALL:
+        await add_task_progress(db, user.user_id, TYPE_ACTIVE_CALL, call.updated_time.second - call.created_time.second)
 
     return {
         "code": 200,

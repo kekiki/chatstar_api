@@ -244,4 +244,4 @@ async def receive_task_reward(data: TaskReceiveRequest, user: User = Depends(cur
     record.updated_time = datetime.datetime.now()
     _grant_reward(db, user, task)
 
-    return {"code": 200, "data": {"reward": _reward_dict(task)}}
+    return {"code": 200, "data": _reward_dict(task)}

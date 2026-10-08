@@ -13,6 +13,9 @@ from app.schemas import SendGiftRequest
 from app.security import current_user, current_user_readonly
 from app.tools import add_transaction, send_chat_message
 
+from app.routers.tasks import add_task_progress
+from app.models.task import TYPE_SEND_GIFT
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["gifts"])
@@ -56,7 +59,7 @@ async def send_gift(
     if not gift:
         raise HTTPException(status_code=404, detail="Gift not found")
 
-    result = await db.execute(select(User).where(User.user_id == data.user_id, User.is_review == user.is_review))
+    result = await db.execute(select(User).where(User.user_id == data.user_id))
     receiver = result.scalar_one_or_none()
     # receiver = await db.get(User, data.user_id)
     if not receiver:
@@ -68,6 +71,7 @@ async def send_gift(
 
     user.balance = (user.balance or 0) - total_cost
     await add_transaction(user, -total_cost, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_GIFT, db=db)
+    await add_task_progress(db, user.user_id, TYPE_SEND_GIFT, 1)
 
     record = GiftRecord(
         gift_id=gift.id,

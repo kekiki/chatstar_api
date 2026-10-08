@@ -110,7 +110,6 @@ async def get_users(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ):
-    # query = select(User).where(User.is_anchor == True, User.is_review == user.is_review)
     query = select(User).where(User.is_anchor == True)
 
     if country:
