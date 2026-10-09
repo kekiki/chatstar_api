@@ -17,7 +17,6 @@ import datetime
 router = APIRouter(prefix="/api", tags=["calls"])
 
 CREATE_MATCH_PRICE = 400
-CREATE_CALL_PRICE = 4000
 
 CALL_TYPE_CALL=0
 CALL_TYPE_AIV=1
@@ -36,6 +35,11 @@ async def createCall(
 
     used_card = False
     if data.call_type == CALL_TYPE_MATCH:
+        media_result = await db.execute(select(Media).where(Media.video_type == 1, Media.is_video == True))
+        medias = media_result.scalars().all()
+        if len(medias) <= 0:
+            raise HTTPException(status_code=400, detail="Create match failed")
+    
         await add_task_progress(db, user.user_id, TYPE_MATCH_TIMES, 1)
 
         if user.match_card_num > 0:
@@ -47,24 +51,26 @@ async def createCall(
             await add_transaction(user, -CREATE_MATCH_PRICE, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_MATCH, db=db)
         else:
             raise HTTPException(status_code=2001, detail="Insufficient balance")
-
-        media_result = await db.execute(select(Media).where(Media.video_type == 1, Media.is_video == True))
     else:
+        result = await db.execute(select(User).where(User.user_id == data.peer_id))
+        anchor = result.scalar_one_or_none()
+        if not anchor:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        media_result = await db.execute(select(Media).where(Media.user_id == data.peer_id, Media.video_type == 1, Media.is_video == True))
+        medias = media_result.scalars().all()
+        if len(medias) <= 0:
+            raise HTTPException(status_code=400, detail="Create call failed")
+    
         if user.call_card_num > 0:
             used_card = True
             user.call_card_num = user.call_card_num - 1
             await add_transaction(user, -1, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_CALL, db=db)
-        elif (user.balance or 0) >= CREATE_CALL_PRICE:
-            user.balance = (user.balance or 0) - CREATE_CALL_PRICE
-            await add_transaction(user, -CREATE_CALL_PRICE, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CALL, db=db)
+        elif (user.balance or 0) >= anchor.call_price:
+            user.balance = (user.balance or 0) - anchor.call_price
+            await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CALL, db=db)
         else:
             raise HTTPException(status_code=2001, detail="Insufficient balance")
-        
-        media_result = await db.execute(select(Media).where(Media.user_id == data.peer_id, Media.video_type == 1, Media.is_video == True))
-    
-    medias = media_result.scalars().all()
-    if len(medias) <= 0:
-        raise HTTPException(status_code=400, detail="Create call failed")
 
     media = random.choice(medias)
     call = Call(
@@ -95,10 +101,15 @@ async def renewCall(
     if call.is_ended:
         raise HTTPException(status_code=404, detail="Call did ended")
 
-    if (user.balance or 0) >= CREATE_CALL_PRICE:
-        user.balance = (user.balance or 0) - CREATE_CALL_PRICE
+    result = await db.execute(select(User).where(User.user_id == data.peer_id))
+    anchor = result.scalar_one_or_none()
+    if not anchor:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if (user.balance or 0) >= anchor.call_price:
+        user.balance = (user.balance or 0) - anchor.call_price
         transaction_type = TRANSACTION_MATCH if call.call_type == CALL_TYPE_MATCH else CALL_TYPE_CALL
-        await add_transaction(user, -CREATE_CALL_PRICE, asset_type=ASSET_DIAMOND, transaction_type=transaction_type, db=db)
+        await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=transaction_type, db=db)
     else:
         raise HTTPException(status_code=2001, detail="Insufficient balance")
 
