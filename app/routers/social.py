@@ -117,7 +117,8 @@ async def block_user(
         )
     )).scalar_one_or_none()
     if existing:
-        return {"code": 400, "msg": "Already blocked"}
+        # return {"code": 400, "msg": "Already blocked"}
+        return {"code": 200, "msg": "success"}
     db.add(UserBlock(user_id=user.user_id, block_user_id=target_user_id))
     return {"code": 200, "msg": "success"}
 
@@ -138,7 +139,8 @@ async def unblock_user(
     )
     block = result.scalar_one_or_none()
     if not block:
-        return {"code": 400, "msg": "Not blocked"}
+        # return {"code": 400, "msg": "Not blocked"}
+        return {"code": 200, "msg": "success"}
     await db.delete(block)
     return {"code": 200, "msg": "success"}
 

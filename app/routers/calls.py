@@ -19,9 +19,8 @@ router = APIRouter(prefix="/api", tags=["calls"])
 CREATE_MATCH_PRICE = 400
 
 CALL_TYPE_CALL=0
-CALL_TYPE_AIV=1
-CALL_TYPE_AIB=2
-CALL_TYPE_MATCH=3
+CALL_TYPE_AIB=1
+CALL_TYPE_MATCH=2
 
 @router.post("/call/create")
 async def createCall(

@@ -203,7 +203,7 @@ async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(
         task_date=today,
     )
     db.add(record)
-    _grant_reward(db,user, task)
+    await _grant_reward(db,user, task)
 
     return {
         "code": 200,
