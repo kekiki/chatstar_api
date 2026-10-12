@@ -106,6 +106,16 @@ async def background_chat_task(sender_id: int, receiver_id: int):
 
         reply_text = random.choice(GIFT_REPLY_MESSAGES)
         async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.user_id == receiver_id))
+            anchor = result.scalar_one_or_none()
+            if not anchor:
+                # logger.warning("AI reply skipped, receiver not found user_id=%s", receiver_id)
+                return
+
+            if anchor.is_review:
+                # logger.warning("AI reply skipped, receiver offline user_id=%s", receiver_id)
+                return
+            
             await send_chat_message(db=db, sender_id=sender_id, receiver_id=receiver_id, msg_type='text', content=reply_text)
             await db.commit()
     except Exception as e:

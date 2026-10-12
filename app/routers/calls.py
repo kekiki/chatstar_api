@@ -100,14 +100,14 @@ async def renewCall(
     if call.is_ended:
         raise HTTPException(status_code=404, detail="Call did ended")
 
-    result = await db.execute(select(User).where(User.user_id == data.peer_id))
+    result = await db.execute(select(User).where(User.user_id == call.anchor_id))
     anchor = result.scalar_one_or_none()
     if not anchor:
         raise HTTPException(status_code=404, detail="User not found")
 
     if (user.balance or 0) >= anchor.call_price:
         user.balance = (user.balance or 0) - anchor.call_price
-        transaction_type = TRANSACTION_MATCH if call.call_type == CALL_TYPE_MATCH else CALL_TYPE_CALL
+        transaction_type = TRANSACTION_MATCH if call.call_type == CALL_TYPE_MATCH else TRANSACTION_CALL
         await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=transaction_type, db=db)
     else:
         raise HTTPException(status_code=2001, detail="Insufficient balance")

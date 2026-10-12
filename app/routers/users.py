@@ -4,7 +4,7 @@ User information routes.
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, asc, func, select
 
 import random
 import datetime
@@ -107,10 +107,14 @@ async def get_users(
     ),
     country: Optional[str] = Query(default=None, description="Filter by country"),
     language_code: Optional[str] = Query(default=None, description="Filter by language code"),
+    is_live: Optional[bool] = Query(default=None, description="Filter by is live"),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ):
-    query = select(User).where(User.is_anchor == True)
+    if user.is_review:
+        query = select(User).where(User.is_anchor == True, User.is_review == True)
+    else:
+        query = select(User).where(User.is_anchor == True)
 
     if country:
         query = query.where(User.country == country)
@@ -119,7 +123,7 @@ async def get_users(
         query = query.where(User.language_code == language_code)
 
     sort_column = getattr(User, sort_by)
-    query = query.order_by(desc(sort_column))
+    query = query.order_by(desc(sort_column), asc(User.is_review))
 
     count_query = select(func.count()).select_from(User).where(User.is_anchor == True)
     if country:
@@ -146,14 +150,6 @@ async def get_users(
         }
 
     anchor_user_ids = [a.user_id for a in anchors]
-
-    # media_result = await db.execute(
-    #     select(Media).where(Media.user_id.in_(anchor_user_ids), Media.video_type == 0)
-    # )
-    # media_map: dict[int, list] = {}
-    # for media in media_result.scalars().all():
-    #     media_map.setdefault(media.user_id, []).append(media.to_dict())
-
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(
             UserFollow.user_id == user.user_id,
@@ -170,20 +166,45 @@ async def get_users(
     )
     liked_ids = set(liked_result.scalars().all())
 
+    media_result = await db.execute(
+        select(Media).where(Media.user_id.in_(anchor_user_ids))
+    )
+    media_map: dict[int, list] = {}
+    for media in media_result.scalars().all():
+        media_map.setdefault(media.user_id, []).append(media)
+
     items = []
     random.shuffle(anchors)
     for anchor in anchors:
         anchor_dict = anchor.to_dict()
-        # anchor_dict["media_list"] = media_map.get(anchor.user_id, [])
         anchor_dict["is_hot"] = anchor.fans_count > 100
         anchor_dict["is_new"] = anchor.created_time is not None and anchor.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
+
+        media_list = []
+        live_list = []
+        for m in media_map.get(anchor.user_id, []):
+            if m.is_video and m.video_type != 0:
+                live_list.append(m.to_dict())
+            else:
+                media_list.append(m.to_dict())
+        is_live_status = len(live_list) > 0 and anchor.fans_count % 2 == 0 
+        anchor_dict["media_list"] = media_list
+
         if user.is_review:
-            anchor_dict["online_status"] = 0
+            anchor_dict["online_status"] = 1
         else:
-            anchor_dict["online_status"] = 1 if anchor.is_review else 0
+            if is_live_status:
+                anchor_dict["online_status"] = 2 
+            else:
+                anchor_dict["online_status"] = 1 if anchor.is_review else 0
+
         anchor_dict["is_followed"] = anchor.user_id in followed_ids
         anchor_dict["is_liked"] = anchor.user_id in liked_ids
-        items.append(anchor_dict)
+        if is_live:
+            if is_live_status:
+                items.append(anchor_dict)
+        else:
+            items.append(anchor_dict)
 
     return {
         "code": 200,
@@ -207,14 +228,17 @@ async def get_user_detail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    anchor_user_ids = [user.user_id]
-
     media_result = await db.execute(
-        select(Media).where(Media.user_id.in_(anchor_user_ids), Media.video_type == 0)
+        select(Media).where(Media.user_id == user.user_id)
     )
-    media_map: dict[int, list] = {}
-    for media in media_result.scalars().all():
-        media_map.setdefault(media.user_id, []).append(media.to_dict())
+
+    media_list = []
+    live_list = []
+    for m in media_result.scalars().all():
+        if m.is_video and m.video_type != 0:
+            live_list.append(m.to_dict())
+        else:
+            media_list.append(m.to_dict())
 
     gift_result = await db.execute(
         select(
@@ -249,7 +273,7 @@ async def get_user_detail(
     followed_result = await db.execute(
         select(UserFollow.follow_user_id).where(
             UserFollow.user_id == current_user.user_id,
-            UserFollow.follow_user_id.in_(anchor_user_ids),
+            UserFollow.follow_user_id == user.user_id,
         )
     )
     followed_ids = set(followed_result.scalars().all())
@@ -257,20 +281,26 @@ async def get_user_detail(
     liked_result = await db.execute(
         select(UserLike.like_user_id).where(
             UserLike.user_id == current_user.user_id,
-            UserLike.like_user_id.in_(anchor_user_ids),
+            UserLike.like_user_id == user.user_id,
         )
     )
     liked_ids = set(liked_result.scalars().all())
     
     anchor_dict = user.to_dict()
-    anchor_dict["media_list"] = media_map.get(user.user_id, [])
+    anchor_dict["media_list"] = media_list
     anchor_dict["gift_list"] = gift_map.get(user.user_id, [])
     anchor_dict["is_hot"] = user.fans_count > 10000
     anchor_dict["is_new"] = user.created_time is not None and user.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
-    if current_user.is_review:
-        anchor_dict["online_status"] = 0
-    else:
-        anchor_dict["online_status"] = 1 if user.is_review else 0
     anchor_dict["is_followed"] = user.user_id in followed_ids
     anchor_dict["is_liked"] = user.user_id in liked_ids
+
+    if current_user.is_review:
+        anchor_dict["online_status"] = 1
+    else:
+        is_live = len(live_list) > 0 and user.fans_count % 2 == 0 
+        if is_live:
+            anchor_dict["online_status"] = 2
+        else:
+            anchor_dict["online_status"] = 1 if user.is_review else 0
+
     return {"code": 200, "data": anchor_dict}

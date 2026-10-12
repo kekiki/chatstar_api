@@ -121,7 +121,11 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
             result = await db.execute(select(User).where(User.user_id == receiver_id))
             anchor = result.scalar_one_or_none()
             if not anchor:
-                logger.warning("AI reply skipped, receiver not found user_id=%s", receiver_id)
+                # logger.warning("AI reply skipped, receiver not found user_id=%s", receiver_id)
+                return
+
+            if anchor.is_review:
+                # logger.warning("AI reply skipped, receiver offline user_id=%s", receiver_id)
                 return
 
             lang_code = anchor.language_code
@@ -138,6 +142,10 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
                 select(ChatMessage).where(*conds).order_by(desc(ChatMessage.id)).limit(6)
             )
             messages = result.scalars().all()
+            if len(messages) > 0 and messages[-1].sender_id == sender_id:
+                logger.warning("AI reply skipped, last message is yours")
+                return
+
             history_msgs = []
             for r in messages:
                 if r.msg_type == 'text':
