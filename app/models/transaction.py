@@ -19,6 +19,7 @@ TRANSACTION_CHAT = 2  # 聊天
 TRANSACTION_TASK = 3  # 任务奖励
 TRANSACTION_CALL = 4  # 通话
 TRANSACTION_MATCH = 5  # 匹配
+TRANSACTION_LIVE = 6  # 直播
 
 class Transaction(Base):
     """Transaction model for SQLAlchemy ORM."""

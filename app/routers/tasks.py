@@ -216,12 +216,8 @@ async def report_task_progress(data: TaskReportRequest, user: User = Depends(cur
     """Report a task event (e.g. follow an anchor) to increase task progress."""
     if data.type == "signin":
         return {"code": 400, "msg": "签到任务请调用 /api/user/signin"}
-    updated = await add_task_progress(db, user.user_id, data.type, data.num)
-    items = [
-        {"task_id": r.task_id, "progress": r.progress, "status": r.status}
-        for r in updated
-    ]
-    return {"code": 200, "data": items}
+    await add_task_progress(db, user.user_id, data.type, data.num)
+    return {"code": 200, "data": {}}
 
 
 @router.post("/user/task/receive")
