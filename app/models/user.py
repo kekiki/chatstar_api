@@ -30,6 +30,7 @@ class User(Base):
     password = Column(String(255))
     total = Column(Integer, default=0)
     firebase_token = Column(String(255))
+    is_reward_received = Column(Boolean, default=False)
 
     gender = Column(Integer, default=0)
     call_card_num = Column(Integer, default=0)

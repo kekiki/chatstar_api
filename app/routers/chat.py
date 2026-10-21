@@ -17,10 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import ALGORITHM, SECRET_KEY, IS_DEBUG
 from app.database import AsyncSessionLocal, get_db, get_db_readonly
 from app.models import Gift, User, ChatMessage
-from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT
+from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT, TRANSACTION_NEW_REWARD, ASSET_CALL_CARD, ASSET_MATCH_CARD
 from app.schemas import SendMessageRequest
 from app.security import current_user, current_user_readonly
-from app.tools import add_transaction, send_chat_message
+from app.tools import add_transaction, send_chat_message, send_userinfo_assets_notification
 from app.ws_manager import ws_manager
 from app.greq_client import groq_client
 
@@ -290,7 +290,29 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
                     "event": "init",
                     "data": {},
                 }, ensure_ascii=False))
-        # async with AsyncSessionLocal() as db:
+        
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.user_id == user_id))
+            user = result.scalar_one_or_none()
+            if user and not user.is_reward_received:
+                user.is_reward_received = True
+
+                user.balance += 100
+                await add_transaction(user, 100, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+
+                user.call_card_num += 3
+                await add_transaction(user, 3, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+
+                user.match_card_num += 3
+                await add_transaction(user, 100, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+
+                user.chat_card_num += 5
+                await add_transaction(user, 100, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+
+                await db.commit()
+
+                await send_userinfo_assets_notification(user)
+
         #     result = await db.execute(
         #         select(ChatMessage)
         #         .where(ChatMessage.receiver_id == user_id, ChatMessage.is_delivered.is_(False))

@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, ChatMessage
-from app.ws_manager import ws_manager, WS_EVENT_USER_ASSETS_CHANGED, WS_EVENT_SEND_CHAT_MESSAGE
+from app.ws_manager import ws_manager, WS_EVENT_USER_ASSETS_CHANGED, WS_EVENT_SEND_CHAT_MESSAGE, WS_EVENT_NEW_USER_REWARD
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -33,6 +33,15 @@ async def send_userinfo_assets_notification(user: User):
         "total": user.total,
     }
     await ws_manager.send_to_user(user_id=user.user_id, event=WS_EVENT_USER_ASSETS_CHANGED, data=data)
+
+async def send_new_user_reward_notification(user: User):
+    data = {
+        "balance": user.balance,
+        "call_card_num": user.call_card_num,
+        "match_card_num": user.match_card_num,
+        "chat_card_num": user.chat_card_num,
+    }
+    await ws_manager.send_to_user(user_id=user.user_id, event=WS_EVENT_NEW_USER_REWARD, data=data)
 
 async def send_chat_message(
     db: AsyncSession,
