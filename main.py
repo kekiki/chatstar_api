@@ -4,9 +4,11 @@ Main application factory and configuration.
 """
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 
 from app import models
 from app.config import HOST, PORT
@@ -34,9 +36,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ===================== Mount static files =====================
-if os.path.exists("web"):
-    app.mount("/static", StaticFiles(directory="web"), name="static")
+# ===================== Health check endpoint =====================
+@app.get("/")
+async def home():
+    """Health check endpoint."""
+    return {
+        "status": "ok",
+        "service": "chatstar-api",
+        "version": "1.0.0",
+    }
+
+@app.get("/delete_account", response_class=HTMLResponse)
+async def home(request: Request):
+    context = {
+        "title": "Delete Account",
+        "name": "Chatstar"
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="delete_account/index.html",
+        context=context
+    )
+
+# ===================== Mount files =====================
+# static 
+app.mount("/static", StaticFiles(directory="web"), name="static")
+
+app.mount("/", StaticFiles(directory="web/delete_account"), name="root_static")
+app.mount("/assets", StaticFiles(directory="web/delete_account/assets"), name="assets")
+app.mount("/lib", StaticFiles(directory="web/delete_account/lib"), name="lib")
+
+# 指定模板目录
+templates = Jinja2Templates(directory="web")
 
 # ===================== Register routers =====================
 app.include_router(auth.router)
@@ -49,17 +80,6 @@ app.include_router(chat.router)
 app.include_router(social.router)
 app.include_router(transactions.router)
 app.include_router(calls.router)
-
-# ===================== Health check endpoint =====================
-@app.get("/")
-async def home():
-    """Health check endpoint."""
-    return {
-        "status": "ok",
-        "service": "chatstar-api",
-        "version": "1.0.0",
-    }
-
 
 # ===================== Run application =====================
 if __name__ == "__main__":

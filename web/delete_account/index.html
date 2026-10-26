@@ -1,0 +1,48 @@
+<html lang="en">
+
+<head>
+	<title>Account cancel</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,maximum-scale=1,minimum-scale=1">
+	<link rel="stylesheet" type="text/css" href="index.css">
+	<script src="lib/axios.min.js"></script>
+	<script src="index.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"></script>
+
+</head>
+
+<body>
+	<div id="nav_bar">
+		<div>Delete account</div>
+	</div>
+	<div id="content-container">
+		<div id="warning">
+			<img src="assets/warning.png" />
+			<div>After canceling your account, all your assets in the app will be destroyed!</div>
+		</div>
+		<div id="logo"><img src="assets/logo.png" /></div>
+		<div id="app_name">ChatStar</div>
+		<div id="account_tip">Account ID:</div>
+		<div id="account_input">
+			<input type="text" name="username" placeholder="Please enter your account ID"
+				oninput="toggleDeleteButton(this)">
+			<img src="assets/close.png" onclick="deleteInput(this);" />
+		</div>
+		<div id="password_tip">Account password:</div>
+		<div id="password_input">
+			<input type="password" name="password" placeholder="Please enter your password">
+			<img src="assets/eye_off.png" onclick="onTogglePasswordShow(this)" />
+		</div>
+		<div id="desc">
+			*Clarify:
+			<br>Before the cancellation application you submit takes effect, please ensure the security of your account.
+			After your account is destroyed, all assets in the APP will be destroyed immediately. If you have any
+			questions, please click the contact customer service button on the right.
+		</div>
+		<div id="submit-box">
+			<button onclick="onSubmit()">Delete account</button>
+		</div>
+	</div>
+</body>
+
+</html>

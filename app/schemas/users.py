@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 class DeleteAccountWithAccountPasswordRequest(BaseModel):
-    user_id: int
+    username: int
     password: str
 
 class SetPasswordRequest(BaseModel):

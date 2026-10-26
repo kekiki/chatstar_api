@@ -1,0 +1,204 @@
+body {
+    margin: 0;
+}
+
+#nav_bar {
+    width: 100vw;
+    position: fixed;
+    height: 50px;
+    font-size: 18;
+    color: #222222;
+    font-weight: 700;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#nav_bar div {
+    display: inline-block;
+}
+
+#warning {
+    background-color: rgba(255, 98, 0, 0.08);
+    align-items: center;
+    display: flex;
+    padding: 12px;
+}
+
+#warning img {
+    width: 16px;
+    height: 16px;
+}
+
+#warning div {
+    color: #FF6200;
+    font-size: 12px;
+    font-family: Poppins;
+    font-weight: 400;
+    padding-left: 6px;
+    word-wrap: break-word
+}
+
+#content-container {
+    position: relative;
+    top: 12px;
+    padding: 60px 0px 12px 0px;
+}
+
+#logo {
+    text-align: center;
+}
+
+#logo img {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    border-radius: 20px;
+    width: 94px;
+    height: 94px;
+}
+
+#app_name {
+    color: #000;
+    font-size: 28px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+#account_tip,
+#password_tip {
+    color: rgba(34, 34, 34, 0.40);
+    font-size: 14px;
+    font-family: Roboto;
+    font-weight: 400;
+    word-wrap: break-word;
+    padding: 0px 12px 0px 12px;
+}
+
+#account_input {
+    position: relative;
+    padding: 0px 12px 0px 12px;
+}
+
+#account_input img {
+    width: 22px;
+    height: 22px;
+    position: absolute;
+    right: 20px;
+    top: 18px;
+    display: none;
+}
+
+#password_input {
+    position: relative;
+    padding: 0px 12px 0px 12px;
+}
+
+#password_input img {
+    width: 24px;
+    height: 24px;
+    position: absolute;
+    right: 20px;
+    top: 18px;
+}
+
+::placeholder {
+    /* Chrome, Firefox, Opera, Safari 10.1+ */
+    color: rgba(34, 34, 34, 0.40);
+    opacity: 1;
+    /* Firefox */
+}
+
+input {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    font-size: 16px;
+    color: #333;
+    width: 100%;
+    background-color: #EDEFF3;
+    border-radius: 12px;
+    border: none;
+    padding: 14px 16px 14px 16px;
+}
+
+#desc {
+    color: #FF6200;
+    font-size: 12px;
+    font-family: Poppins;
+    font-weight: 400;
+    word-wrap: break-word;
+    padding: 0px 12px 0px 12px;
+}
+
+#submit-box {
+    width: 100%;
+    margin-top: 32px;
+    text-align: center;
+}
+
+#submit-box button {
+   background: #FF6200;
+    
+    border-radius: 54px;
+    padding: 12px 84px 12px 84px;
+    border: none;
+    color: white;
+    height: 54px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+#customer-service {
+    position: fixed;
+    width: 54px;
+    height: 64px;
+    right: 0px;
+    bottom: 90px;
+}
+
+#bottom-box{
+    position:relative;
+    top:12px;
+}
+
+.AIHelpSupportBox{
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.close {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  background: #A1A1A1;
+  border-radius: 25px;
+  cursor: pointer;
+}
+
+.close:before {
+  position: absolute;
+  content: "";
+  width: 20px;
+  height: 2px;
+  background: #fff;
+  transform: rotate(45deg);
+  top: 14px;
+  left: 6px;
+}
+
+.close:after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 2px;
+  background: #fff;
+  transform: rotate(-45deg);
+  top: 14px;
+  left: 6px;
+}
