@@ -18,10 +18,10 @@ function deleteInput(button) {
 function onTogglePasswordShow(img) {
     var input = document.querySelector('#password_input input');
     if (passwordShow) {
-        img.setAttribute('src', 'assets/eye_off.png');
+        img.setAttribute('src', 'assets/eye_off.webp');
         input.setAttribute('type', 'password');
     } else {
-        img.setAttribute('src', 'assets/eye_on.png');
+        img.setAttribute('src', 'assets/eye_on.webp');
         input.setAttribute('type', 'text');
     }
     passwordShow = !passwordShow;
