@@ -304,3 +304,14 @@ async def get_user_detail(
             anchor_dict["online_status"] = 1 if user.is_review else 0
 
     return {"code": 200, "data": anchor_dict}
+
+
+@router.post("/user/getAibUser")
+async def get_aib_user(db: AsyncSession = Depends(get_db_readonly)):  
+    media_result = await db.execute(select(Media).where(Media.video_type == 1, Media.is_video == True))
+    medias = media_result.scalars().all()
+    if len(medias) <= 0:
+        raise HTTPException(status_code=400, detail="Create match call failed")
+
+    media = random.choice(medias)
+    return {"code": 200, "data": media.user_id}

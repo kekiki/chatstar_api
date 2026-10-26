@@ -294,7 +294,7 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(User).where(User.user_id == user_id))
             user = result.scalar_one_or_none()
-            if user and not user.is_reward_received:
+            if user and not user.is_review and not user.is_reward_received:
                 user.is_reward_received = True
 
                 user.balance += 100
@@ -304,12 +304,13 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
                 await add_transaction(user, 3, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
                 user.match_card_num += 3
-                await add_transaction(user, 100, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+                await add_transaction(user, 3, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
                 user.chat_card_num += 5
-                await add_transaction(user, 100, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+                await add_transaction(user, 5, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
                 await db.commit()
+                await db.refresh(user)
 
                 await send_userinfo_assets_notification(user)
 
