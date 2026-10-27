@@ -2,6 +2,7 @@
 Social interaction routes: follow, block, like, report, and list endpoints.
 """
 
+import random
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -14,6 +15,7 @@ from app.schemas import ReportUserRequest, TargetUserRequest
 from app.security import current_user, current_user_readonly
 from app.routers.tasks import add_task_progress
 from app.models.task import TYPE_FOLLOW_USERS
+from app.tools import send_user_be_followed_or_liked_notification
 
 router = APIRouter(prefix="/api", tags=["social"])
 
@@ -67,6 +69,8 @@ async def follow_user(
     user.follow_count += 1
     target.fans_count += 1  
     await add_task_progress(db, user.user_id, TYPE_FOLLOW_USERS, 1)
+    await send_user_be_followed_or_liked_notification(user, target)
+    
     return {"code": 200, "msg": "success"}
 
 @router.post("/user/unfollow")
@@ -210,6 +214,8 @@ async def like_user(
         return {"code": 400, "msg": "Already liked"}
     db.add(UserLike(user_id=user.user_id, like_user_id=target_user_id))
     target.like_count += 1
+    await send_user_be_followed_or_liked_notification(user, target)
+
     return {"code": 200, "msg": "success"}
 
 

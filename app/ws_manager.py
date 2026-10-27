@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 WS_EVENT_SEND_CHAT_MESSAGE = 'ws_event_send_chat_message' #发送聊天消息
 WS_EVENT_USER_ASSETS_CHANGED = 'ws_event_user_assets_changed' #用户资产发生变化
 WS_EVENT_NEW_USER_REWARD = 'ws_event_new_user_reward' #新用户奖励
+WS_EVENT_USER_BE_FOLLOWED = 'ws_event_user_be_followed' #用户被关注
+WS_EVENT_USER_BE_LIKED = 'ws_event_user_be_liked' #用户被点赞
 
 class WSManager:
     """Manage active WebSocket connections keyed by user_id (multi-device supported)."""

@@ -7,7 +7,7 @@ from app.models import User, Call, Media
 from app.models.transaction import ASSET_DIAMOND, ASSET_MATCH_CARD, ASSET_CALL_CARD, TRANSACTION_MATCH, TRANSACTION_CALL, TRANSACTION_LIVE
 from app.database import get_db
 from app.security import current_user
-from app.tools import add_transaction
+from app.tools import add_transaction, send_user_be_followed_or_liked_notification
 from app.routers.tasks import add_task_progress
 from app.models.task import TYPE_MATCH_TIMES, TYPE_ACTIVE_CALL
 
@@ -67,6 +67,7 @@ async def createCall(
             call_type=data.call_type,
         )
         db.add(call)
+        await send_user_be_followed_or_liked_notification(user, anchor)
         await db.flush()
 
         return {
@@ -114,6 +115,7 @@ async def createCall(
             call_type=data.call_type,
         )
         db.add(call)
+        await send_user_be_followed_or_liked_notification(user, anchor)
         await db.flush()
 
         return {
@@ -152,6 +154,7 @@ async def createCall(
             call_type=data.call_type,
         )
         db.add(call)
+        await send_user_be_followed_or_liked_notification(user, anchor)
         await db.flush()
 
         return {
