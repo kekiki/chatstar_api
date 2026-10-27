@@ -67,7 +67,7 @@ async def createCall(
             call_type=data.call_type,
         )
         db.add(call)
-        await send_user_be_followed_or_liked_notification(user, anchor)
+        await send_user_be_followed_or_liked_notification(user, anchor, db)
         await db.flush()
 
         return {
@@ -115,7 +115,7 @@ async def createCall(
             call_type=data.call_type,
         )
         db.add(call)
-        await send_user_be_followed_or_liked_notification(user, anchor)
+        await send_user_be_followed_or_liked_notification(user, anchor, db)
         await db.flush()
 
         return {
@@ -154,7 +154,7 @@ async def createCall(
             call_type=data.call_type,
         )
         db.add(call)
-        await send_user_be_followed_or_liked_notification(user, anchor)
+        await send_user_be_followed_or_liked_notification(user, anchor, db)
         await db.flush()
 
         return {

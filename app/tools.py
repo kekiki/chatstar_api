@@ -57,6 +57,7 @@ async def send_user_be_followed_or_liked_notification(fromUser: User, toUser: Us
         if fromUser.user_id not in followed_ids:
             toUser.follow_count += 1
             fromUser.fans_count += 1
+            db.add(UserFollow(user_id=toUser.user_id, follow_user_id=fromUser.user_id))
             data = {"fans_count": fromUser.fans_count}
             await ws_manager.send_to_user(user_id=fromUser.user_id, event=WS_EVENT_USER_BE_FOLLOWED, data=data)
     else:
@@ -69,6 +70,7 @@ async def send_user_be_followed_or_liked_notification(fromUser: User, toUser: Us
         liked_ids = set(liked_result.scalars().all())
         if fromUser.user_id not in liked_ids:
             fromUser.like_count += 1
+            db.add(UserLike(user_id=toUser.user_id, like_user_id=fromUser.user_id))
             data = {"like_count": fromUser.like_count}
             await ws_manager.send_to_user(user_id=fromUser.user_id, event=WS_EVENT_USER_BE_LIKED, data=data)
 

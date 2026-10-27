@@ -69,7 +69,7 @@ async def follow_user(
     user.follow_count += 1
     target.fans_count += 1  
     await add_task_progress(db, user.user_id, TYPE_FOLLOW_USERS, 1)
-    await send_user_be_followed_or_liked_notification(user, target)
+    await send_user_be_followed_or_liked_notification(user, target, db)
     
     return {"code": 200, "msg": "success"}
 
@@ -214,7 +214,7 @@ async def like_user(
         return {"code": 400, "msg": "Already liked"}
     db.add(UserLike(user_id=user.user_id, like_user_id=target_user_id))
     target.like_count += 1
-    await send_user_be_followed_or_liked_notification(user, target)
+    await send_user_be_followed_or_liked_notification(user, target, db)
 
     return {"code": 200, "msg": "success"}
 
@@ -330,21 +330,21 @@ async def get_my_fans(
     )
     rows = (await db.execute(query)).all()
 
-    fan_ids = [f_row.user_id for f_row, _ in rows]
+    # fan_ids = [f_row.user_id for f_row, _ in rows]
 
-    liked_result = await db.execute(
-        select(UserLike.like_user_id).where(
-            UserLike.user_id == user.user_id,
-            UserLike.like_user_id.in_(fan_ids),
-        )
-    )
-    liked_ids = set(liked_result.scalars().all())
+    # liked_result = await db.execute(
+    #     select(UserLike.like_user_id).where(
+    #         UserLike.user_id == user.user_id,
+    #         UserLike.like_user_id.in_(fan_ids),
+    #     )
+    # )
+    # liked_ids = set(liked_result.scalars().all())
 
     items = []
     for follow_row, fan_user in rows:
         d = fan_user.to_dict()
-        d["fans_at"] = follow_row.created_time.isoformat() if follow_row.created_time else None
-        d["is_liked"] = fan_user.user_id in liked_ids
+        # d["fans_at"] = follow_row.created_time.isoformat() if follow_row.created_time else None
+        # d["is_liked"] = fan_user.user_id in liked_ids
         if user.is_review:
             d["online_status"] = 0
         else:
@@ -385,21 +385,21 @@ async def get_my_likers(
     )
     rows = (await db.execute(query)).all()
 
-    liker_ids = [l_row.user_id for l_row, _ in rows]
+    # liker_ids = [l_row.user_id for l_row, _ in rows]
 
-    followed_result = await db.execute(
-        select(UserFollow.follow_user_id).where(
-            UserFollow.user_id == user.user_id,
-            UserFollow.follow_user_id.in_(liker_ids),
-        )
-    )
-    followed_ids = set(followed_result.scalars().all())
+    # followed_result = await db.execute(
+    #     select(UserFollow.follow_user_id).where(
+    #         UserFollow.user_id == user.user_id,
+    #         UserFollow.follow_user_id.in_(liker_ids),
+    #     )
+    # )
+    # followed_ids = set(followed_result.scalars().all())
 
     items = []
     for like_row, liker_user in rows:
         d = liker_user.to_dict()
-        d["liked_at"] = like_row.created_time.isoformat() if like_row.created_time else None
-        d["is_followed"] = liker_user.user_id in followed_ids
+        d["liked_at"] = int(like_row.created_time.timestamp()) if like_row.created_time else None
+        # d["is_followed"] = liker_user.user_id in followed_ids
         if user.is_review:
             d["online_status"] = 0
         else:
