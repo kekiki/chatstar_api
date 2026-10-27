@@ -50,7 +50,7 @@ function onSubmit() {
     }).then(response => {
         console.log(response);
         let data = response['data']
-        if (data['code'] == 0) {
+        if (data['code'] == 200) {
             alert('Successfully canceled account')
             document.querySelector('#password_input input').value = '';
             document.querySelector('#account_input input').value = '';

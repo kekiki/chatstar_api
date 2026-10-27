@@ -74,7 +74,7 @@ async def delete_account(user: User = Depends(current_user), db: AsyncSession = 
 @router.post("/user/deleteAccountWithAccountPassword")
 async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Delete account with user_id and password."""
-    result = await db.execute(select(User).where(User.user_id == data.user_id))
+    result = await db.execute(select(User).where(User.user_id == data.username))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
