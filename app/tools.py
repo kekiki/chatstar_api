@@ -45,6 +45,10 @@ async def send_new_user_reward_notification(user: User):
     }
     await ws_manager.send_to_user(user_id=user.user_id, event=WS_EVENT_NEW_USER_REWARD, data=data)
 
+async def send_new_user_welcome_notification(db: AsyncSession, user: User):
+    text = 'Welcome to Chatstar. Here, you will make many new friends from different regions. Wish you a pleasant experience.'
+    await send_system_chat_message(db, user.user_id, text)
+
 async def send_user_be_followed_or_liked_notification(fromUser: User, toUser: User, db: AsyncSession):
     if random.random() < 0.5:
         followed_result = await db.execute(

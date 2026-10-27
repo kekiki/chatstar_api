@@ -20,7 +20,7 @@ from app.models import Gift, User, ChatMessage
 from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT, TRANSACTION_NEW_REWARD, ASSET_CALL_CARD, ASSET_MATCH_CARD
 from app.schemas import SendMessageRequest
 from app.security import current_user, current_user_readonly
-from app.tools import add_transaction, send_chat_message, send_userinfo_assets_notification
+from app.tools import add_transaction, send_chat_message, send_userinfo_assets_notification, send_new_user_reward_notification, send_new_user_welcome_notification
 from app.ws_manager import ws_manager
 from app.greq_client import groq_client
 
@@ -309,10 +309,12 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
                 user.chat_card_num += 5
                 await add_transaction(user, 5, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
+                await send_new_user_welcome_notification(db, user)
                 await db.commit()
                 await db.refresh(user)
 
                 await send_userinfo_assets_notification(user)
+                await send_new_user_reward_notification(user)
 
         #     result = await db.execute(
         #         select(ChatMessage)
