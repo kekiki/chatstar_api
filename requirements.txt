@@ -3,7 +3,7 @@ uvicorn
 python-jose[cryptography]
 passlib
 sqlalchemy
-psycopg2-binary
+# psycopg2-binary
 python-multipart
 google-auth
 uvicorn[standard]
@@ -14,7 +14,7 @@ httpx
 botocore
 python-dotenv
 greenlet
-googletrans-py==4.0.0
-requests
+# googletrans-py==4.0.0
+# requests
 groq
 pydantic

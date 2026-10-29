@@ -42,7 +42,7 @@ async def createCall(
     
         await add_task_progress(db, user.user_id, TYPE_MATCH_TIMES, 1)
 
-        if user.match_card_num > 0:
+        if (user.match_card_num or 0) > 0:
             used_card = True
             user.match_card_num = user.match_card_num - 1
             await add_transaction(user, -1, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_MATCH, db=db)
@@ -97,7 +97,7 @@ async def createCall(
         if call:
             return {
                 "code": 200,
-                "data": call.to_dict() | {'is_ended': call.is_ended, 'is_paid': True},
+                "data": call.to_dict(),
             }
 
         call_price = anchor.call_price * 3
@@ -135,12 +135,14 @@ async def createCall(
             raise HTTPException(status_code=400, detail="Create call failed")
 
         call_price = anchor.call_price
-        if user.call_card_num > 0:
+        is_paid = False
+        if (user.call_card_num or 0) > 0:
             used_card = True
             free_seconds = 60
             user.call_card_num = user.call_card_num - 1
             await add_transaction(user, -1, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_CALL, db=db)
         elif (user.balance or 0) >= anchor.call_price:
+            is_paid = True
             user.balance = (user.balance or 0) - anchor.call_price
             await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CALL, db=db)
         else:
@@ -152,6 +154,7 @@ async def createCall(
             anchor_id=media.user_id,
             url=media.url,
             call_type=data.call_type,
+            is_paid=is_paid,
         )
         db.add(call)
         await send_user_be_followed_or_liked_notification(user, anchor, db)
@@ -173,19 +176,22 @@ async def renewCall(
     call = result.scalar_one_or_none()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if call.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
 
     result = await db.execute(select(User).where(User.user_id == call.anchor_id))
     anchor = result.scalar_one_or_none()
     if not anchor:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Anchor not found")
         
     if call.call_type == CALL_TYPE_LIVE:
-        if call.updated_time.second - call.created_time.second < 3:
+        if (call.updated_time - call.created_time).total_seconds() < 30:
             live_price = int(anchor.call_price * 3)
             if (user.balance or 0) >= live_price:
                 user.balance = (user.balance or 0) - live_price
                 await add_transaction(user, -live_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_LIVE, db=db)
                 call.updated_time = datetime.datetime.now()
+                call.is_paid = True
             else:
                 raise HTTPException(status_code=2001, detail="Insufficient balance")
     else:
@@ -197,6 +203,7 @@ async def renewCall(
             transaction_type = TRANSACTION_MATCH if call.call_type == CALL_TYPE_MATCH else TRANSACTION_CALL
             await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=transaction_type, db=db)
             call.updated_time = datetime.datetime.now()
+            call.is_paid = True
         else:
             raise HTTPException(status_code=2001, detail="Insufficient balance")
 
@@ -215,6 +222,8 @@ async def endCall(
     call = result.scalar_one_or_none()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if call.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
     if call.is_ended:
         raise HTTPException(status_code=404, detail="Call did ended")
 

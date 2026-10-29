@@ -192,6 +192,10 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    # 幂等保护：已验证成功的订单不重复发放奖励
+    if order.order_status == 1:
+        return {"code": 200, "data": {"verified": True, "google": result, "msg": "Order already verified"}}
+
     if purchase_state == 0:
         order.order_status = 1
         db.add(order)

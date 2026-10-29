@@ -295,26 +295,31 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
             result = await db.execute(select(User).where(User.user_id == user_id))
             user = result.scalar_one_or_none()
             if user and not user.is_review and not user.is_reward_received:
-                user.is_reward_received = True
+                # 修复竞态：多端同时连 WS 时"先查后改"会重复发奖，改为原子占坑
+                claim = await db.execute(
+                    update(User)
+                    .where(User.user_id == user_id, User.is_reward_received.is_(False))
+                    .values(is_reward_received=True)
+                )
+                if claim.rowcount == 1:
+                    user.balance = (user.balance or 0) + 100
+                    await add_transaction(user, 100, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
-                user.balance += 100
-                await add_transaction(user, 100, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+                    user.call_card_num = (user.call_card_num or 0) + 3
+                    await add_transaction(user, 3, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
-                user.call_card_num += 3
-                await add_transaction(user, 3, asset_type=ASSET_CALL_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+                    user.match_card_num = (user.match_card_num or 0) + 3
+                    await add_transaction(user, 3, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
-                user.match_card_num += 3
-                await add_transaction(user, 3, asset_type=ASSET_MATCH_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+                    user.chat_card_num = (user.chat_card_num or 0) + 5
+                    await add_transaction(user, 5, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
 
-                user.chat_card_num += 5
-                await add_transaction(user, 5, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_NEW_REWARD, db=db)
+                    await send_new_user_welcome_notification(db, user)
+                    await db.commit()
+                    await db.refresh(user)
 
-                await send_new_user_welcome_notification(db, user)
-                await db.commit()
-                await db.refresh(user)
-
-                await send_userinfo_assets_notification(user)
-                await send_new_user_reward_notification(user)
+                    await send_userinfo_assets_notification(user)
+                    await send_new_user_reward_notification(user)
 
         #     result = await db.execute(
         #         select(ChatMessage)

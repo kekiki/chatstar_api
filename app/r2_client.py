@@ -95,3 +95,14 @@ class R2Client:
             "url": public_url,
             "object_key": object_key
         }
+
+
+_r2_client: R2Client | None = None
+
+
+def get_r2_client() -> R2Client:
+    """Module-level singleton: boto3 client creation is expensive, reuse it."""
+    global _r2_client
+    if _r2_client is None:
+        _r2_client = R2Client()
+    return _r2_client

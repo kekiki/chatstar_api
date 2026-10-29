@@ -211,18 +211,23 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
 
 
 async def _get_user_counts(db: AsyncSession, user_id: int) -> dict:
-    follow_count_q = select(func.count()).select_from(UserFollow).where(UserFollow.user_id == user_id)
-    fans_count_q = select(func.count()).select_from(UserFollow).where(UserFollow.follow_user_id == user_id)
-    like_count_q = select(func.count()).select_from(UserLike).where(UserLike.like_user_id == user_id)
-    r1, r2, r3 = await asyncio.gather(
-        db.execute(follow_count_q),
-        db.execute(fans_count_q),
-        db.execute(like_count_q),
+    # 修复：原来用 asyncio.gather 在同一个 AsyncSession 上并发执行 3 个查询，
+    # AsyncSession 非任务安全，高并发下会随机报错；改为单条 SQL 一次往返。
+    follow_count = select(func.count()).select_from(UserFollow).where(UserFollow.user_id == user_id).scalar_subquery()
+    fans_count = select(func.count()).select_from(UserFollow).where(UserFollow.follow_user_id == user_id).scalar_subquery()
+    like_count = select(func.count()).select_from(UserLike).where(UserLike.like_user_id == user_id).scalar_subquery()
+    result = await db.execute(
+        select(
+            follow_count.label("follow_count"),
+            fans_count.label("fans_count"),
+            like_count.label("like_count"),
+        )
     )
+    row = result.one()
     return {
-        "follow_count": r1.scalar_one(),
-        "fans_count": r2.scalar_one(),
-        "like_count": r3.scalar_one(),
+        "follow_count": row.follow_count,
+        "fans_count": row.fans_count,
+        "like_count": row.like_count,
     }
 
 
@@ -263,11 +268,16 @@ async def login_google(request: Request, data: GoogleUserInfo, db: AsyncSession 
     if not package_name:
         raise HTTPException(status_code=400, detail="Missing package_name header")
 
-    result = await db.execute(select(User).where(User.google_id == str(data.user_id)))
-    user = result.scalar_one_or_none()
+    # 修复：google_id/email 可能重复，scalar_one_or_none 遇到多行会抛 MultipleResultsFound(500)
+    result = await db.execute(
+        select(User).where(User.google_id == str(data.user_id)).order_by(User.id).limit(1)
+    )
+    user = result.scalars().first()
     if not user and data.email:
-        result = await db.execute(select(User).where(User.email == str(data.email)))
-        user = result.scalar_one_or_none()
+        result = await db.execute(
+            select(User).where(User.email == str(data.email)).order_by(User.id).limit(1)
+        )
+        user = result.scalars().first()
 
     if user:
         user_dict = await _query_user(request, db, package_name, user)
@@ -290,8 +300,11 @@ async def login_guest(request: Request, db: AsyncSession = Depends(get_db)):
     if not package_name:
         raise HTTPException(status_code=400, detail="Missing package_name header")
 
-    result = await db.execute(select(User).where(User.device_id == device_id))
-    user = result.scalar_one_or_none()
+    # 修复：device_id 可能重复，scalar_one_or_none 遇到多行会抛 MultipleResultsFound(500)
+    result = await db.execute(
+        select(User).where(User.device_id == device_id).order_by(User.id).limit(1)
+    )
+    user = result.scalars().first()
     if user:
         user_dict = await _query_user(request, db, package_name, user)
         token = create_token({"sub": str(user.user_id)})

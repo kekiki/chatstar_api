@@ -15,7 +15,7 @@ from app.models import Media, User, UserFollow, UserLike, GiftRecord, Gift
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.translator import Translator
-from app.r2_client import R2Client
+from app.r2_client import get_r2_client
 
 router = APIRouter(prefix="/api", tags=["users"])
 
@@ -38,7 +38,7 @@ async def update_user_info(data: UpdateUserInfoRequest, user: User = Depends(cur
 @router.get("/user/uploadUrl")
 async def get_upload_url(user: User = Depends(current_user_readonly), suffix: str = "png"):
     """Get upload URL for user avatar."""
-    r2_client = R2Client()
+    r2_client = get_r2_client()
     resp = await r2_client.get_r2_upload_url(suffix)
     return {"code": 200, "data": resp}
 
@@ -95,7 +95,7 @@ async def update_firebase_token(data: UpdateFirebaseTokenRequest, user: User = D
 async def translate(data: GoogleTranslateRequest, user: User = Depends(current_user_readonly)):
     """Translate text using Google Translate"""
     translator = Translator()
-    res = translator.translate(data.text, tl=data.target_language)
+    res = await translator.translate(data.text, tl=data.target_language)
     return {"code": 200, "data": res}
 
 @router.get("/user/getUsers")
@@ -111,25 +111,20 @@ async def get_users(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ):
+    conds = [User.is_anchor == True]
     if user.is_review:
-        query = select(User).where(User.is_anchor == True, User.is_review == True)
-    else:
-        query = select(User).where(User.is_anchor == True)
-
+        conds.append(User.is_review == True)
     if country:
-        query = query.where(User.country == country)
-
+        conds.append(User.country == country)
     if language_code:
-        query = query.where(User.language_code == language_code)
+        conds.append(User.language_code == language_code)
+
+    query = select(User).where(*conds)
 
     sort_column = getattr(User, sort_by)
     query = query.order_by(desc(sort_column), asc(User.is_review))
 
-    count_query = select(func.count()).select_from(User).where(User.is_anchor == True)
-    if country:
-        count_query = count_query.where(User.country == country)
-    if language_code:
-        count_query = count_query.where(User.language_code == language_code)
+    count_query = select(func.count()).select_from(User).where(*conds)
 
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
@@ -174,7 +169,7 @@ async def get_users(
         media_map.setdefault(media.user_id, []).append(media)
 
     items = []
-    random.shuffle(anchors)
+    # 修复：去掉 random.shuffle —— 它会破坏 sort_by 排序和分页一致性（翻页重复/漏数据）
     for anchor in anchors:
         anchor_dict = anchor.to_dict()
         anchor_dict["is_hot"] = anchor.fans_count > 100

@@ -16,6 +16,7 @@ class Call(Base):
     url = Column(String, default="")
     call_type = Column(Integer, index=True, default=0) # 0: Call, 1: AIV, 2: AIB, 3: Match
     is_ended = Column(Boolean, default=False)
+    is_paid = Column(Boolean, default=False)
     created_time = Column(DateTime, default=lambda: datetime.datetime.now())
     updated_time = Column(DateTime, default=lambda: datetime.datetime.now(), onupdate=lambda: datetime.datetime.now())
 
@@ -26,4 +27,6 @@ class Call(Base):
             "peer_id": self.anchor_id,
             "url": self.url,
             "call_type": self.call_type,
+            "is_ended": self.is_ended,
+            "is_paid": self.is_paid,
         }

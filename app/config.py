@@ -17,7 +17,7 @@ def get_env(key: str) -> str:
     return val
 
 ENV_MODE = get_env("ENV_MODE")
-IS_DEBUG = True #ENV_MODE == "develop"
+IS_DEBUG = ENV_MODE == "develop"
 
 if IS_DEBUG:
     print("本地开发环境")
