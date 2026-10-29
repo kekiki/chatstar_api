@@ -169,11 +169,11 @@ async def get_users(
         media_map.setdefault(media.user_id, []).append(media)
 
     items = []
-    # 修复：去掉 random.shuffle —— 它会破坏 sort_by 排序和分页一致性（翻页重复/漏数据）
+    random.shuffle(anchors)
     for anchor in anchors:
         anchor_dict = anchor.to_dict()
         anchor_dict["is_hot"] = anchor.fans_count > 100
-        anchor_dict["is_new"] = anchor.created_time is not None and anchor.created_time > int((datetime.datetime.now() - datetime.timedelta(days=30)).timestamp())
+        anchor_dict["is_new"] = anchor.created_time is not None and anchor.created_time > int((datetime.datetime.now() - datetime.timedelta(days=90)).timestamp())
 
         media_list = []
         live_list = []

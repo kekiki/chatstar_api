@@ -18,3 +18,4 @@ greenlet
 # requests
 groq
 pydantic
+faker

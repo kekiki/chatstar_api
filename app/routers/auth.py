@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from faker import Faker
 
 from app.database import get_db
 from app.ip_location import IPLocationResult, ip_location
@@ -17,22 +18,7 @@ from app.schemas import GoogleUserInfo, UserAgent, PasswordLoginRequest
 from app.security import create_token, verify_password
 
 router = APIRouter(prefix="/api", tags=["auth"])
-
-
-MALE_NICKNAMES = [
-    "James", "Robert", "John", "Michael", "David", "William", "Richard", "Joseph",
-    "Thomas", "Christopher", "Charles", "Daniel", "Matthew", "Anthony", "Mark",
-    "Donald", "Steven", "Paul", "Andrew", "Joshua", "Kenneth", "Kevin", "Brian",
-    "George", "Timothy", "Ronald", "Edward", "Jason", "Jeffrey", "Ryan", "Jacob",
-    "Gary", "Nicholas", "Eric", "Jonathan", "Stephen", "Larry", "Justin", "Scott",
-    "Brandon", "Benjamin", "Samuel", "Raymond", "Gregory", "Frank", "Alexander",
-    "Patrick", "Jack", "Dennis", "Jerry", "Tyler", "Aaron", "Nathan", "Henry",
-    "Peter", "Adam", "Douglas", "Zachary", "Harold", "Carl", "Arthur", "Gerald",
-    "Roger", "Keith", "Jeremy", "Terry", "Lawrence", "Sean", "Christian", "Albert",
-    "Joe", "Ethan", "Austin", "Jesse", "Willie", "Billy", "Bryan", "Bruce",
-    "Jordan", "Ralph", "Roy", "Noah", "Dylan", "Eugene", "Wayne", "Alan",
-    "Juan", "Louis", "Russell", "Vincent", "Philip", "Bobby", "Johnny", "Bradley",
-]
+fake = Faker()
 
 MALE_AVATARS = [
     "https://pub-0675854993c24f3faa980e803c92fb1b.r2.dev/defaults/avatars/1_m.jpg",
@@ -68,7 +54,7 @@ MALE_AVATARS = [
 ]
 
 def _random_male_nickname() -> str:
-    return random.choice(MALE_NICKNAMES)
+    return fake.first_name()
 
 def _random_male_avatar() -> str:
     return random.choice(MALE_AVATARS)
@@ -249,7 +235,6 @@ async def _query_user(request: Request, db: AsyncSession, package_name: str, use
         is_review = result.scalar_one_or_none() is not None
 
     user.is_review = is_review
-
     user_dict = user.to_dict()
     counts = await _get_user_counts(db, user.user_id)
     user_dict.update(counts)
