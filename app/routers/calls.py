@@ -81,6 +81,7 @@ async def createCall(
         if not anchor:
             raise HTTPException(status_code=404, detail="User not found")
 
+        call_price = anchor.call_price * 3
         recent_call_time = datetime.datetime.now() - datetime.timedelta(hours=6)
         result = await db.execute(
             select(Call)
@@ -97,10 +98,9 @@ async def createCall(
         if call:
             return {
                 "code": 200,
-                "data": call.to_dict(),
+                "data": call.to_dict() | {'call_price': call_price},
             }
 
-        call_price = anchor.call_price * 3
         free_seconds = 30
         media_result = await db.execute(select(Media).where(Media.user_id == data.peer_id, Media.video_type != 0, Media.is_video == True))
         medias = media_result.scalars().all()
