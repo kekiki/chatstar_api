@@ -362,8 +362,10 @@ async def _handle_ws_action(user_id: int, raw: str) -> dict:
     except ValueError:
         return {"event": "error", "data": {"msg": "invalid json"}}
     action = frame.get("action")
-    if action == "ping":
-        return {"event": "pong", "data": {}}
+    # 启动命令已经添加了心跳
+    # if action == "ping":
+    #     return {"event": "pong", "data": {}}
+
     # if action == "read_messages":
     #     data = frame.get("data") or {}
     #     peer_id = data.get("peer_id")
