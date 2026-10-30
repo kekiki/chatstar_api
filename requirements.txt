@@ -19,3 +19,4 @@ greenlet
 groq
 pydantic
 faker
+uvloop
