@@ -105,14 +105,64 @@ async def send_message(
 
     await db.commit()
 
-    if data.msg_type == "text":
-        # AI异步回复消息
-        background_tasks.add_task(background_chat_task, sender_id=sender_id, receiver_id=receiver_id, content=content, before_id=before_id)
+    # 所有消息类型均触发AI异步回复(图片/视频/礼物转成事件描述让AI自然反应)
+    background_tasks.add_task(background_chat_task, sender_id=sender_id, receiver_id=receiver_id, content=content, before_id=before_id, msg_type=data.msg_type)
 
     return {"code": 200, "data": message_dict}
 
 
-async def background_chat_task(sender_id: int, receiver_id: int, content: str, before_id: int):
+def _readable_profile_field(value: Optional[str], limit: int = 200) -> str:
+    """Normalize a free-form profile field (plain text or JSON) to readable text."""
+    if not value or not value.strip():
+        return ""
+    text = value.strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            text = ", ".join(str(x) for x in parsed if x)
+        elif isinstance(parsed, dict):
+            text = ", ".join(str(v) for v in parsed.values() if v)
+    except (ValueError, TypeError):
+        pass
+    return text[:limit].strip()
+
+
+def _build_role_desc(anchor: User) -> str:
+    """Build the AI anchor persona from her profile."""
+    parts = [f"You are {anchor.nickname or 'a lovely streamer'}, a warm and friendly {anchor.age or 22}-year-old female streamer on a global social app."]
+    if anchor.country:
+        parts.append(f"You live in {anchor.country}.")
+    tags = _readable_profile_field(anchor.tags)
+    if tags:
+        parts.append(f"Your personality and interests: {tags}.")
+    info = _readable_profile_field(anchor.info)
+    if info:
+        parts.append(f"Your self-introduction: {info}.")
+    return " ".join(parts)
+
+
+def _build_ai_input(msg_type: str, content: str) -> str:
+    """把收到的消息转成 AI 对话输入; 非文本消息转为事件描述。"""
+    if msg_type == "text":
+        return content
+    if msg_type == "gift":
+        gift_desc = ""
+        try:
+            payload = json.loads(content)
+            if isinstance(payload, dict) and payload.get("gift_name"):
+                count = payload.get("count") or 1
+                gift_desc = f" {payload['gift_name']}" + (f" x{count}" if isinstance(count, int) and count > 1 else "")
+        except (ValueError, TypeError):
+            pass
+        return f"(He just sent you a virtual gift{gift_desc} in your chat. React sweetly surprised and thank him warmly, maybe tease him a little.)"
+    if msg_type == "image":
+        return "(He just sent you a photo in your chat. React warmly with playful curiosity or a sweet compliment, and ask him about it.)"
+    if msg_type == "video":
+        return "(He just sent you a short video in your chat. React warmly with playful curiosity and ask him about it.)"
+    return content
+
+
+async def background_chat_task(sender_id: int, receiver_id: int, content: str, before_id: int, msg_type: str = "text"):
     try:
         delay_sec = random.uniform(5, 30)
         await asyncio.sleep(delay_sec)
@@ -129,7 +179,7 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
                 return
 
             lang_code = anchor.language_code
-            role_desc = f"You are {anchor.nickname}, a bright and lovely {anchor.age}-year-old girl, short answers."
+            role_desc = _build_role_desc(anchor)
 
             conds = [
                 or_(
@@ -152,13 +202,94 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
                     role = 'assistant' if r.sender_id != sender_id else 'user'
                     history_msgs.append({"role": role, "content": r.content})
 
-            reply_text = await groq_client.chat_endpoint(content=content, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
+            ai_input = _build_ai_input(msg_type, content)
+            reply_text = await groq_client.chat_endpoint(content=ai_input, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
 
             if reply_text and len(reply_text) > 0:
                 await send_chat_message(db=db, sender_id=receiver_id, receiver_id=sender_id, msg_type='text', content=reply_text)
             await db.commit()
     except Exception as e:
         logger.exception("chat AI reply background task failed: %s", e)
+
+
+# ---------- 话术任务: 用户 WS 在线时由随机主播主动发消息引导聊天 ----------
+
+SOLICIT_FIRST_DELAY_RANGE = (8, 15)       # 连接后首条消息延迟(秒)
+SOLICIT_INITIAL_INTERVAL_RANGE = (10, 20) # 初始发送间隔(秒)
+SOLICIT_INTERVAL_GROWTH = 1.6             # 间隔增长系数: 连接越久频率越低
+SOLICIT_MAX_INTERVAL = 300                # 最大间隔(秒)
+SOLICIT_RECENT_ANCHOR_LIMIT = 5           # 短期内不重复选取的主播数
+
+SOLICIT_OPENERS = [
+    "You just noticed a fan you like is online. Send him a short sweet hello and invite him to chat with you now.",
+    "You are a little bored tonight and want someone fun to talk to. Text a fan a playful message to start a chat.",
+    "You saw a fan online you'd love to know better. Send him a warm, slightly flirty message to catch his attention.",
+    "You want a fan to notice you. Send an inviting, teasingly sweet message to draw him into a chat.",
+]
+
+# 每个用户一个话术任务, 多端连接只启动一个
+_solicit_tasks: dict = {}
+
+
+async def _pick_random_anchor(db: AsyncSession, user_id: int, recent_anchor_ids: set) -> Optional[User]:
+    """随机选取一位在线池中的主播, 尽量避开近期已发过的。"""
+    conds = [User.is_anchor.is_(True), User.is_review.is_(False), User.user_id != user_id]
+    if recent_anchor_ids:
+        conds.append(User.user_id.not_in(recent_anchor_ids))
+    result = await db.execute(select(User).where(*conds).order_by(func.random()).limit(1))
+    anchor = result.scalars().first()
+    if anchor or not recent_anchor_ids:
+        return anchor
+    # 候选不足时放宽"近期已发"限制
+    result = await db.execute(
+        select(User)
+        .where(User.is_anchor.is_(True), User.is_review.is_(False), User.user_id != user_id)
+        .order_by(func.random())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+async def solicit_chat_task(user_id: int):
+    """周期性给在线用户发送主播引导消息, 间隔随连接时长递增。"""
+    recent_anchor_ids: set = set()
+    interval = random.uniform(*SOLICIT_INITIAL_INTERVAL_RANGE)
+    try:
+        await asyncio.sleep(random.uniform(*SOLICIT_FIRST_DELAY_RANGE))
+        while True:
+            try:
+                async with AsyncSessionLocal() as db:
+                    result = await db.execute(select(User).where(User.user_id == user_id))
+                    user = result.scalar_one_or_none()
+                    # 用户不存在/审核模式/用户本身是主播时终止任务
+                    if not user or user.is_review or user.is_anchor:
+                        return
+                    anchor = await _pick_random_anchor(db, user_id, recent_anchor_ids)
+                    if anchor:
+                        # 注意: commit 会使 ORM 对象过期(expire_on_commit), 之后不可再访问其属性,
+                        # 所以先取好所有需要的字段
+                        anchor_user_id = anchor.user_id
+                        anchor_lang = anchor.language_code
+                        text = await groq_client.chat_endpoint(
+                            content=random.choice(SOLICIT_OPENERS),
+                            # 主播资料是什么语言就一直用什么语言发消息
+                            lang_code=anchor_lang,
+                            role_desc=_build_role_desc(anchor),
+                            history_messages=[],
+                        )
+                        if text:
+                            await send_chat_message(db=db, sender_id=anchor_user_id, receiver_id=user_id, msg_type='text', content=text)
+                            await db.commit()
+                            recent_anchor_ids.add(anchor_user_id)
+                            if len(recent_anchor_ids) > SOLICIT_RECENT_ANCHOR_LIMIT:
+                                recent_anchor_ids.pop()
+            except Exception as e:
+                # 单轮失败不终止任务, 等下一轮重试
+                logger.exception("solicit chat round failed user_id=%s: %s", user_id, e)
+            interval = min(interval * SOLICIT_INTERVAL_GROWTH, SOLICIT_MAX_INTERVAL)
+            await asyncio.sleep(random.uniform(interval * 0.8, interval * 1.2))
+    except asyncio.CancelledError:
+        pass
 
 
 # async def build_conversations(db: AsyncSession, user_id: int) -> list:
@@ -285,6 +416,10 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
         return
     await websocket.accept()
     await ws_manager.connect(user_id, websocket)
+    # 启动话术任务(多端连接复用同一个)
+    task = _solicit_tasks.get(user_id)
+    if task is None or task.done():
+        _solicit_tasks[user_id] = asyncio.create_task(solicit_chat_task(user_id))
     try:
         await websocket.send_text(json.dumps({
                     "event": "init",
@@ -351,3 +486,6 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
         logger.exception("ws connection error user_id=%s", user_id)
     finally:
         await ws_manager.disconnect(user_id, websocket)
+        # 用户所有连接都断开后, 取消话术任务
+        if not ws_manager.is_online(user_id) and user_id in _solicit_tasks:
+            _solicit_tasks.pop(user_id).cancel()

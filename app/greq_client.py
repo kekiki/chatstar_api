@@ -14,14 +14,38 @@ TEMPERATURE = 0.7
 DEBUG_MESSAGES = [
     "Can we talk for a while?",
     "What do you do every day?",
-    "Hi, how are you?",
+    "नमस्ते, आप कैसे हैं?",
     "If you want to know about me, just chat",
     "newbie here, any tips?❤️",
     "Bored? Let's chill!",
     "hey there, what's up?",
     "Hi guys message me",
-    "Hello I'm available"
+    "Hello I'm available",
+    "Can you give me a call?",
+    "สวัสดีครับ โทรหาผมด้วยนะ",
+    "مرحبًا، اتصل بي من فضلك",
+    "Kamu masih single sekarang?",
+    "Di mana kamu?",
+    "Ayo, mari kita bicara.",
+    "Bulanku, senang bertemu denganmu",
+    "Berikan saya kesempatan, lihat apa yang akan terjadi",
+    "Online na, baby",
+    "أنا الآن متاح، يا حبيبي",
+    "هل لديك وقت لتحدث قليلاً؟",
+    "มีเวลาพูดคุยกันไหม",
+    "क्या आपके पास समय है बात करने के लिए?",
 ]
+
+# AI主播聊天行为准则: 模拟真实女主播与粉丝私聊的口吻
+PERSONA_RULES = (
+    "You are texting one-on-one with a fan on a social app, like chatting with a close friend.\n"
+    "- Always stay in character; never say or imply you are an AI, bot or language model.\n"
+    "- Be warm, playful and genuinely curious about the fan; often end with a light question to keep the chat flowing.\n"
+    "- Reply like real texting: 1-3 short casual sentences, lively and natural, occasionally a tasteful emoji.\n"
+    "- Show emotions: be sweet, encouraging and positive, never cold, formal or robotic.\n"
+    "- Keep answers varied; never repeat an earlier reply word for word.\n"
+    "- Light tasteful flirting is welcome, but always stay respectful.\n"
+)
 
 class GreqClient:
     def __init__(self):
@@ -55,7 +79,7 @@ class GreqClient:
             return random.choice(DEBUG_MESSAGES)
 
         lang_rule = self.get_language_rule(lang_code)
-        system_prompt = f'{role_desc}{lang_rule}'
+        system_prompt = f"{role_desc}\n{PERSONA_RULES}\n{lang_rule}"
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history_messages)
