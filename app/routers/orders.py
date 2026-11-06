@@ -3,21 +3,22 @@ Order routes: create order, query by orderNo, query by userId, verify Google pur
 """
 
 import logging
-import os
-from datetime import datetime
 import time
-from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import google_play
+from app.google_play import GooglePlayError
 from app.database import get_db, get_db_readonly
 from app.models import Order, User, Product
+from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_FAILED
 from app.models.transaction import ASSET_DIAMOND, ASSET_VIP, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD, TRANSACTION_PURCHASE
 from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
-from app.tools import get_http_client, add_transaction
+from app.tools import add_transaction
 from app.models.task import TYPE_RECHARGE_TIMES, TYPE_UNLOCK_VIP, TYPE_FIRST_RECHARGE
 
 logger = logging.getLogger("orders")
@@ -94,110 +95,60 @@ async def get_user_orders(
     }
 
 
-_cached_token = None
-_cached_token_expiry = 0.0
-
-
-def _get_google_access_token() -> Optional[str]:
-    """Return an access token either from a service account file or from env var.
-
-    If `GOOGLE_SERVICE_ACCOUNT_FILE` is set (path to JSON key file), use it to
-    obtain an access token with the `androidpublisher` scope. Otherwise fall
-    back to `GOOGLE_ACCESS_TOKEN` env var.
-    """
-    global _cached_token, _cached_token_expiry
-
-    now = time.time()
-    if _cached_token and now + 60 < _cached_token_expiry:
-        return _cached_token
-
-    sa_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
-    if sa_file and os.path.exists(sa_file):
-        try:
-            from google.oauth2 import service_account
-            from google.auth.transport.requests import Request as GoogleRequest
-        except Exception:
-            logger.exception("google-auth library missing")
-            raise RuntimeError(
-                "google-auth not installed; add `google-auth` to requirements to use service account verification"
-            )
-        try:
-            scopes = ["https://www.googleapis.com/auth/androidpublisher"]
-            creds = service_account.Credentials.from_service_account_file(sa_file, scopes=scopes)
-            creds.refresh(GoogleRequest())
-            token = creds.token
-            expiry_ts = creds.expiry.timestamp() if getattr(creds, "expiry", None) else now + 3600
-            _cached_token = token
-            _cached_token_expiry = expiry_ts
-            return token
-        except Exception as e:
-            logger.exception("failed to obtain service account token: %s", e)
-            raise RuntimeError("failed to obtain service account token")
-
-    token = os.environ.get("GOOGLE_ACCESS_TOKEN")
-    if token:
-        return token
-    return None
-
-
-async def _verify_google_purchase_with_api(package_name: str, product_id: str, token: str) -> dict:
-    access_token = _get_google_access_token()
-    if not access_token:
-        logger.error("Google verification not configured: no token available")
-        raise RuntimeError("Google verification not configured (missing token or service account file)")
-
-    url = (
-        f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{package_name}"
-        f"/purchases/products/{product_id}/tokens/{token}"
-    )
-    headers = {"Authorization": f"Bearer {access_token}"}
-    try:
-        client = await get_http_client()
-        resp = await client.get(url, headers=headers)
-    except Exception as e:
-        logger.exception("HTTP request to Google failed: %s", e)
-        raise RuntimeError("HTTP request to Google failed")
-
-    if resp.status_code != 200:
-        logger.error("Google verification failed status=%s body=%s", resp.status_code, resp.text)
-        raise RuntimeError(f"Google verification failed: {resp.status_code} {resp.text}")
-
-    try:
-        return resp.json()
-    except Exception:
-        logger.exception("failed to parse Google response JSON")
-        raise RuntimeError("failed to parse Google response")
-
-
 @router.post("/order/verify")
 async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Verify a Google Play in-app purchase and update order status.
 
-    Expects `GOOGLE_ACCESS_TOKEN` env var to be set with a valid OAuth2 token.
+    Requires `GOOGLE_SERVICE_ACCOUNT_FILE` (recommended) or `GOOGLE_ACCESS_TOKEN`
+    env var to be configured. Purchase tokens are bound to orders with a unique
+    constraint so the same Google purchase can never be replayed on another order.
     """
-    try:
-        result = await _verify_google_purchase_with_api(data.package_name, data.product_id, data.purchase_token)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-    purchase_state = result.get("purchaseState")
-
-    result_product = await db.execute(select(Product).where(Product.sku == data.product_id))
-    product = result_product.scalar_one_or_none()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
+    # 订单必须存在且属于当前用户
     result_order = await db.execute(select(Order).where(Order.order_no == data.order_no, Order.user_id == user.user_id))
     order = result_order.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
     # 幂等保护：已验证成功的订单不重复发放奖励
-    if order.order_status == 1:
-        return {"code": 200, "data": {"verified": True, "google": result, "msg": "Order already verified"}}
+    if order.order_status == ORDER_STATUS_PAID:
+        return {"code": 200, "data": {"verified": True, "msg": "Order already verified"}}
 
-    if purchase_state == 0:
-        order.order_status = 1
+    # 防重放：同一 Google 购买凭据只能绑定一个订单
+    result_replay = await db.execute(
+        select(Order.id).where(Order.purchase_token == data.purchase_token, Order.id != order.id)
+    )
+    if result_replay.scalar_one_or_none() is not None:
+        logger.warning("purchase token replay rejected, order_no=%s user_id=%s", data.order_no, user.user_id)
+        raise HTTPException(status_code=409, detail="Purchase token already used")
+
+    # 订单 sku 必须与实际购买的商品一致，防止下单与发货脱钩
+    if order.sku != data.product_id:
+        logger.warning("sku mismatch rejected, order_no=%s order_sku=%s product_id=%s", data.order_no, order.sku, data.product_id)
+        raise HTTPException(status_code=400, detail="Product does not match the order")
+
+    # 商品必须属于对应包名
+    result_product = await db.execute(
+        select(Product).where(Product.sku == data.product_id, Product.package_name == data.package_name)
+    )
+    product = result_product.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # 调 Google Play Developer API 验证购买
+    try:
+        result = await google_play.verify_purchase(data.package_name, data.product_id, data.purchase_token)
+    except GooglePlayError as e:
+        logger.error("google verify failed order_no=%s: %s", data.order_no, e)
+        raise HTTPException(status_code=502, detail="Google purchase verification failed")
+
+    purchase_state = result.get("purchaseState")
+    now_ts = int(time.time())
+
+    if purchase_state == google_play.PURCHASE_STATE_PURCHASED:
+        order.order_status = ORDER_STATUS_PAID
+        order.purchase_token = data.purchase_token
+        order.google_order_id = result.get("orderId") or ""
+        order.updated_time = now_ts
         db.add(order)
         
         from app.routers.tasks import add_task_progress
@@ -212,7 +163,6 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
             user.total = (user.total or 0) + product.diamonds
 
         if product.vip_days and product.vip_days > 0:
-            now_ts = int(time.time())
             current_expire = user.vip_expire_time or now_ts
             base = max(current_expire, now_ts)
             user.vip_expire_time = base + product.vip_days * 86400
@@ -234,4 +184,41 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
         noti_msg = 'Congratulations! Your recharge was successful. '
         await send_system_chat_message(db,user.user_id,noti_msg)
 
-    return {"code": 200, "data": {"verified": purchase_state == 0, "google": result}}
+        verified = True
+    elif purchase_state == google_play.PURCHASE_STATE_CANCELED:
+        order.order_status = ORDER_STATUS_FAILED
+        order.updated_time = now_ts
+        db.add(order)
+        verified = False
+    else:
+        # PURCHASE_STATE_PENDING 或未知状态：保持待支付，不发货
+        order.updated_time = now_ts
+        db.add(order)
+        verified = False
+
+    return {"code": 200, "data": {"verified": verified, "google": result}}
+
+
+@router.post("/order/processRefunds")
+async def process_google_refunds(request: Request):
+    """Manually trigger one Google refund processing pass.
+
+    Requires the `x-cron-secret` header to match the `CRON_SECRET` env var
+    (used by external cron / ops tooling). Disabled when CRON_SECRET is unset.
+    """
+    import os
+
+    cron_secret = os.environ.get("CRON_SECRET")
+    if not cron_secret:
+        raise HTTPException(status_code=503, detail="Refund processing endpoint is disabled")
+    if request.headers.get("x-cron-secret") != cron_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    from app.google_refund import process_refunds_once
+
+    try:
+        summary = await process_refunds_once()
+    except Exception as e:
+        logger.exception("manual refund processing failed")
+        raise HTTPException(status_code=500, detail="Refund processing failed")
+    return {"code": 200, "data": summary}

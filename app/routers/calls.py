@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from typing import Optional
 
 from app.schemas import CreateCallRequest, RenewCallRequest, HangupCallRequest
 from app.models import User, Call, Media
-from app.models.transaction import ASSET_DIAMOND, ASSET_MATCH_CARD, ASSET_CALL_CARD, TRANSACTION_MATCH, TRANSACTION_CALL, TRANSACTION_LIVE
-from app.database import get_db
-from app.security import current_user
+from app.models.transaction import ASSET_DIAMOND, ASSET_MATCH_CARD, ASSET_CALL_CARD, TRANSACTION_MATCH, TRANSACTION_CALL, TRANSACTION_LIVE, TRANSACTION_REFUND
+from app.database import get_db, get_db_readonly
+from app.security import current_user, current_user_readonly
 from app.tools import add_transaction, send_user_be_followed_or_liked_notification
 from app.routers.tasks import add_task_progress
 from app.models.task import TYPE_MATCH_TIMES, TYPE_ACTIVE_CALL
@@ -229,12 +230,109 @@ async def endCall(
 
     call.is_ended = True
     call.updated_time = datetime.datetime.now()
+    duration = (call.updated_time - call.created_time).total_seconds()
 
     if call.call_type == CALL_TYPE_CALL:
-        seconds = (call.updated_time - call.created_time).total_seconds()
-        await add_task_progress(db, user.user_id, TYPE_ACTIVE_CALL, int(seconds))
+        await add_task_progress(db, user.user_id, TYPE_ACTIVE_CALL, int(duration))
 
+    if not data.user_hangup and call.is_paid and duration < 30:
+        result = await db.execute(select(User).where(User.user_id == call.anchor_id))
+        anchor = result.scalar_one_or_none()
+        if not anchor:
+            raise HTTPException(status_code=404, detail="Anchor not found")
+
+        await add_transaction(user, anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_REFUND, db=db)
+        
     return {
         "code": 200,
         "data": {},
+    }
+
+
+@router.get("/call/records")
+async def get_call_records(
+    user_id: Optional[int] = Query(default=None, description="User ID, defaults to the current user"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    user: User = Depends(current_user_readonly),
+    db: AsyncSession = Depends(get_db_readonly),
+):
+    """Get paginated call records for a user, sorted by created_time desc.
+
+    Only the current user's own records can be queried; passing another
+    user's ID is rejected.
+    """
+    target_user_id = user_id if user_id is not None else user.user_id
+    if target_user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    base_query = select(Call).where(Call.user_id == target_user_id)
+    total_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
+    total = total_result.scalar() or 0
+    result = await db.execute(
+        base_query.order_by(Call.created_time.desc()).offset((page - 1) * page_size).limit(page_size)
+    )
+    calls = result.scalars().all()
+
+    # 批量取对端用户信息，避免 N+1 查询
+    peer_ids = list({call.anchor_id for call in calls if call.anchor_id})
+    peers = {}
+    if peer_ids:
+        peer_result = await db.execute(select(User).where(User.user_id.in_(peer_ids)))
+        peers = {peer.user_id: peer for peer in peer_result.scalars().all()}
+
+    media_result = await db.execute(
+        select(Media).where(Media.user_id.in_(peer_ids))
+    )
+    media_map: dict[int, list] = {}
+    for media in media_result.scalars().all():
+        media_map.setdefault(media.user_id, []).append(media)
+
+    items = []
+    for call in calls:
+        peer = peers.get(call.anchor_id)
+        duration_seconds = 0
+        if call.is_ended and call.created_time and call.updated_time:
+            duration_seconds = max(0, int((call.updated_time - call.created_time).total_seconds()))
+
+        live_list = []
+        for m in media_map.get(peer.user_id, []):
+            if m.is_video and m.video_type != 0:
+                live_list.append(m.to_dict())
+        is_live_status = len(live_list) > 0 and peer.fans_count % 2 == 0 
+
+        if user.is_review:
+            online_status = 1
+        else:
+            if is_live_status:
+                online_status = 2 
+            else:
+                online_status = 1 if peer.is_review else 0
+
+        items.append({
+            "call_id": call.id,
+            "peer_id": call.anchor_id,
+            "call_type": call.call_type,
+            "is_ended": call.is_ended,
+            "is_paid": call.is_paid,
+            "duration_seconds": duration_seconds,
+            "created_time": int(call.created_time.timestamp()) if call.created_time else None,
+            "updated_time": int(call.updated_time.timestamp()) if call.updated_time else None,
+            "peer_info": {
+                "user_id": peer.user_id,
+                "nickname": peer.nickname,
+                "avatar": peer.avatar,
+                "online_status": online_status,
+            } if peer else None,
+        })
+
+    return {
+        "code": 200,
+        "data": {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+        },
     }

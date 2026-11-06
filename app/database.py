@@ -67,12 +67,37 @@ AsyncSessionLocal = async_sessionmaker(
 Base = declarative_base()
 
 
+def _upgrade_pay_orders(sync_conn) -> None:
+    """Lightweight startup migration: add Google Play columns to existing tables.
+
+    `create_all` does not alter existing tables, so add the purchase_token /
+    google_order_id columns and their indexes manually (idempotent).
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if not inspector.has_table("pay_orders"):
+        return
+    columns = {c["name"] for c in inspector.get_columns("pay_orders")}
+    if "purchase_token" not in columns:
+        sync_conn.execute(text("ALTER TABLE pay_orders ADD COLUMN purchase_token VARCHAR"))
+    if "google_order_id" not in columns:
+        sync_conn.execute(text("ALTER TABLE pay_orders ADD COLUMN google_order_id VARCHAR"))
+    sync_conn.execute(
+        text("CREATE UNIQUE INDEX IF NOT EXISTS ix_pay_orders_purchase_token ON pay_orders (purchase_token)")
+    )
+    sync_conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_pay_orders_google_order_id ON pay_orders (google_order_id)")
+    )
+
+
 async def init_db_tables():
-    """Create database tables for all registered models."""
+    """Create database tables for all registered models and run schema upgrades."""
     import app.models
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_upgrade_pay_orders)
 
 
 async def get_db():

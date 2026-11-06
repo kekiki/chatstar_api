@@ -11,14 +11,25 @@ from fastapi.staticfiles import StaticFiles
 from app import models
 from app.config import HOST, PORT
 from app.database import init_db_tables
-from app.routers import auth, chat, orders, users, web, gifts, tasks, social, transactions, calls
+from app.routers import auth, chat, orders, users, web, gifts, tasks, social, transactions, calls, rtdn
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database tables on startup."""
+    """Initialize database tables on startup, start background refund polling."""
+    import asyncio
+
     await init_db_tables()
+    from app.google_refund import start_refund_polling
+
+    refund_task = start_refund_polling()
     yield
+    if refund_task and not refund_task.done():
+        refund_task.cancel()
+        try:
+            await refund_task
+        except asyncio.CancelledError:
+            pass
 
 app = FastAPI(
     title="ChatStar API",
@@ -60,6 +71,7 @@ app.include_router(chat.router)
 app.include_router(social.router)
 app.include_router(transactions.router)
 app.include_router(calls.router)
+app.include_router(rtdn.router)
 
 # ===================== Run application =====================
 if __name__ == "__main__":

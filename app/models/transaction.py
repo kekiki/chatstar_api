@@ -21,6 +21,7 @@ TRANSACTION_CALL = 4  # 通话
 TRANSACTION_MATCH = 5  # 匹配
 TRANSACTION_LIVE = 6  # 直播
 TRANSACTION_NEW_REWARD = 7  # 新用户奖励
+TRANSACTION_REFUND = 8  # 退款回收
 
 class Transaction(Base):
     """Transaction model for SQLAlchemy ORM."""

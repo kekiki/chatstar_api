@@ -11,3 +11,4 @@ class RenewCallRequest(BaseModel):
 
 class HangupCallRequest(BaseModel):
     call_id: int # int 通话ID
+    user_hangup: bool #是否用户主动挂断
