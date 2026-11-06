@@ -31,7 +31,7 @@ class R2Client:
     async def get_r2_upload_url(self, suffix: str):
         try:
             file_name = self.generate_filename(suffix)
-            object_key = f'uploads/{self.generate_filename(file_name.split(".")[-1])}'
+            object_key = f'users/{self.generate_filename(file_name.split(".")[-1])}'
             # content_type = self.get_content_type(file_name)
 
             # 生成PUT预签名URL

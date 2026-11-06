@@ -3,6 +3,7 @@ Chat routes: history via REST, everything else over WebSocket.
 WebSocket is also used by the notification service (balance/order/gift pack pushes).
 """
 import asyncio
+import datetime
 import json
 import logging
 import uuid
@@ -14,12 +15,12 @@ from jose import JWTError, jwt
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import ALGORITHM, SECRET_KEY, IS_DEBUG
-from app.database import AsyncSessionLocal, get_db, get_db_readonly
+from app.config import ALGORITHM, SECRET_KEY
+from app.database import AsyncSessionLocal, get_db
 from app.models import Gift, User, ChatMessage
 from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT, TRANSACTION_NEW_REWARD, ASSET_CALL_CARD, ASSET_MATCH_CARD
 from app.schemas import SendMessageRequest
-from app.security import current_user, current_user_readonly
+from app.security import current_user
 from app.tools import add_transaction, send_chat_message, send_userinfo_assets_notification, send_new_user_reward_notification, send_new_user_welcome_notification
 from app.ws_manager import ws_manager
 from app.greq_client import groq_client
@@ -214,11 +215,12 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
 
 # ---------- 话术任务: 用户 WS 在线时由随机主播主动发消息引导聊天 ----------
 
-SOLICIT_FIRST_DELAY_RANGE = (8, 15)       # 连接后首条消息延迟(秒)
-SOLICIT_INITIAL_INTERVAL_RANGE = (10, 20) # 初始发送间隔(秒)
-SOLICIT_INTERVAL_GROWTH = 1.6             # 间隔增长系数: 连接越久频率越低
-SOLICIT_MAX_INTERVAL = 300                # 最大间隔(秒)
-SOLICIT_RECENT_ANCHOR_LIMIT = 5           # 短期内不重复选取的主播数
+SOLICIT_FIRST_DELAY_RANGE = (8, 15)        # 连接后首条消息延迟(秒)
+SOLICIT_INITIAL_INTERVAL_RANGE = (60, 120) # 初始发送间隔(秒)
+SOLICIT_INTERVAL_GROWTH = 2.0              # 间隔增长系数: 连接越久频率越低
+SOLICIT_MAX_INTERVAL = 600                 # 最大间隔(秒)
+SOLICIT_RECENT_ANCHOR_LIMIT = 5            # 短期内不重复选取的主播数
+SOLICIT_MAX_PER_DAY = 13                   # 每个用户每天最多收到的话术条数
 
 SOLICIT_OPENERS = [
     "You just noticed a fan you like is online. Send him a short sweet hello and invite him to chat with you now.",
@@ -230,6 +232,39 @@ SOLICIT_OPENERS = [
 # 每个用户一个话术任务, 多端连接只启动一个
 _solicit_tasks: dict = {}
 
+# 每个用户当天已收到的话术条数: user_id -> [日期, 条数]
+_solicit_daily_sent: dict = {}
+
+
+def _get_solicit_sent_today(user_id: int) -> int:
+    """获取用户当天已收到的话术条数, 跨天自动归零并清理过期记录。"""
+    today = datetime.date.today()
+    record = _solicit_daily_sent.get(user_id)
+    if not record or record[0] != today:
+        for uid, rec in list(_solicit_daily_sent.items()):
+            if rec[0] != today:
+                del _solicit_daily_sent[uid]
+        _solicit_daily_sent[user_id] = [today, 0]
+        return 0
+    return record[1]
+
+
+def _incr_solicit_sent_today(user_id: int) -> None:
+    """话术发送成功后计数+1。"""
+    _get_solicit_sent_today(user_id)
+    _solicit_daily_sent[user_id][1] += 1
+
+
+async def _user_replied_today(db: AsyncSession, user_id: int) -> bool:
+    """用户当天是否发过消息(回复过), 发过则不再推送话术。"""
+    today_start = int(datetime.datetime.combine(datetime.date.today(), datetime.time.min).timestamp())
+    result = await db.execute(
+        select(ChatMessage.id)
+        .where(ChatMessage.sender_id == user_id, ChatMessage.created_time >= today_start)
+        .limit(1)
+    )
+    return result.first() is not None
+
 
 async def _pick_random_anchor(db: AsyncSession, user_id: int, recent_anchor_ids: set) -> Optional[User]:
     """随机选取一位在线池中的主播, 尽量避开近期已发过的。"""
@@ -240,18 +275,22 @@ async def _pick_random_anchor(db: AsyncSession, user_id: int, recent_anchor_ids:
     anchor = result.scalars().first()
     if anchor or not recent_anchor_ids:
         return anchor
-    # 候选不足时放宽"近期已发"限制
-    result = await db.execute(
-        select(User)
-        .where(User.is_anchor.is_(True), User.is_review.is_(False), User.user_id != user_id)
-        .order_by(func.random())
-        .limit(1)
-    )
-    return result.scalars().first()
+    # # 候选不足时放宽"近期已发"限制
+    # result = await db.execute(
+    #     select(User)
+    #     .where(User.is_anchor.is_(True), User.is_review.is_(False), User.user_id != user_id)
+    #     .order_by(func.random())
+    #     .limit(1)
+    # )
+    # return result.scalars().first()
 
 
 async def solicit_chat_task(user_id: int):
-    """周期性给在线用户发送主播引导消息, 间隔随连接时长递增。"""
+    """周期性给在线用户发送主播引导消息。
+
+    发送条件: 用户当天没有回复过 + 当天话术未超过 SOLICIT_MAX_PER_DAY 条;
+    条件不满足或本轮没有产生消息时跳过本轮(仍按递增间隔休眠), 从而降低发送频率。
+    """
     recent_anchor_ids: set = set()
     interval = random.uniform(*SOLICIT_INITIAL_INTERVAL_RANGE)
     try:
@@ -264,25 +303,31 @@ async def solicit_chat_task(user_id: int):
                     # 用户不存在/审核模式/用户本身是主播时终止任务
                     if not user or user.is_review or user.is_anchor:
                         return
-                    anchor = await _pick_random_anchor(db, user_id, recent_anchor_ids)
-                    if anchor:
-                        # 注意: commit 会使 ORM 对象过期(expire_on_commit), 之后不可再访问其属性,
-                        # 所以先取好所有需要的字段
-                        anchor_user_id = anchor.user_id
-                        anchor_lang = anchor.language_code
-                        text = await groq_client.chat_endpoint(
-                            content=random.choice(SOLICIT_OPENERS),
-                            # 主播资料是什么语言就一直用什么语言发消息
-                            lang_code=anchor_lang,
-                            role_desc=_build_role_desc(anchor),
-                            history_messages=[],
-                        )
-                        if text:
-                            await send_chat_message(db=db, sender_id=anchor_user_id, receiver_id=user_id, msg_type='text', content=text)
-                            await db.commit()
-                            recent_anchor_ids.add(anchor_user_id)
-                            if len(recent_anchor_ids) > SOLICIT_RECENT_ANCHOR_LIMIT:
-                                recent_anchor_ids.pop()
+                    # 用户当天已回复过, 跳过本轮
+                    replied = await _user_replied_today(db, user_id)
+                    # 当天话术已达上限, 跳过本轮
+                    sent_today = _get_solicit_sent_today(user_id)
+                    if not replied and sent_today < SOLICIT_MAX_PER_DAY:
+                        anchor = await _pick_random_anchor(db, user_id, recent_anchor_ids)
+                        if anchor:
+                            # 注意: commit 会使 ORM 对象过期(expire_on_commit), 之后不可再访问其属性,
+                            # 所以先取好所有需要的字段
+                            anchor_user_id = anchor.user_id
+                            anchor_lang = anchor.language_code
+                            text = await groq_client.chat_endpoint(
+                                content=random.choice(SOLICIT_OPENERS),
+                                # 主播资料是什么语言就一直用什么语言发消息
+                                lang_code=anchor_lang,
+                                role_desc=_build_role_desc(anchor),
+                                history_messages=[],
+                            )
+                            if text:
+                                await send_chat_message(db=db, sender_id=anchor_user_id, receiver_id=user_id, msg_type='text', content=text)
+                                await db.commit()
+                                _incr_solicit_sent_today(user_id)
+                                recent_anchor_ids.add(anchor_user_id)
+                                if len(recent_anchor_ids) > SOLICIT_RECENT_ANCHOR_LIMIT:
+                                    recent_anchor_ids.pop()
             except Exception as e:
                 # 单轮失败不终止任务, 等下一轮重试
                 logger.exception("solicit chat round failed user_id=%s: %s", user_id, e)
@@ -362,6 +407,7 @@ async def _handle_ws_action(user_id: int, raw: str) -> dict:
     except ValueError:
         return {"event": "error", "data": {"msg": "invalid json"}}
     action = frame.get("action")
+
     # 启动命令已经添加了心跳
     # if action == "ping":
     #     return {"event": "pong", "data": {}}
@@ -423,10 +469,10 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
     if task is None or task.done():
         _solicit_tasks[user_id] = asyncio.create_task(solicit_chat_task(user_id))
     try:
-        await websocket.send_text(json.dumps({
-                    "event": "init",
-                    "data": {},
-                }, ensure_ascii=False))
+        # await websocket.send_text(json.dumps({
+        #             "event": "init",
+        #             "data": {},
+        #         }, ensure_ascii=False))
         
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(User).where(User.user_id == user_id))
@@ -473,12 +519,13 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
         #         for m in offline_msgs:
         #             m.is_delivered = True
         #         await db.commit()
+
         while True:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_IDLE_TIMEOUT)
             except asyncio.TimeoutError:
                 logger.info("ws idle timeout, closing user_id=%s", user_id)
-                await websocket.close(code=1001)
+                # await websocket.close(code=1001)
                 break
             ack = await _handle_ws_action(user_id, raw)
             await websocket.send_text(json.dumps(ack, ensure_ascii=False))
