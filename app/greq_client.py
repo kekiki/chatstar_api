@@ -7,7 +7,7 @@ import random
 logger = logging.getLogger(__name__)
 
 # Groq模型配置
-MODEL_NAME = "llama-3.2-3b-preview"
+MODEL_NAME = "openai/gpt-oss-20b"
 MAX_TOKENS = 1024
 TEMPERATURE = 0.7
 
