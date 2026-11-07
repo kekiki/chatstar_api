@@ -55,6 +55,10 @@ async def home():
         "version": "1.0.0",
     }
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 # ===================== Mount files =====================
 # static 
 app.mount("/static", StaticFiles(directory="web"), name="static")

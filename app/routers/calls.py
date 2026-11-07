@@ -213,6 +213,25 @@ async def renewCall(
         "data": {},
     }
 
+@router.post("/call/start")
+async def startCall(
+    data: RenewCallRequest,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Call).where(Call.id == data.call_id))
+    call = result.scalar_one_or_none()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    if call.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    call.created_time = datetime.datetime.now()
+    return {
+        "code": 200,
+        "data": {},
+    }
+
 @router.post("/call/end")
 async def endCall(
     data: HangupCallRequest,
@@ -266,7 +285,7 @@ async def get_call_records(
     if target_user_id != user.user_id:
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    base_query = select(Call).where(Call.user_id == target_user_id)
+    base_query = select(Call).where(Call.user_id == target_user_id, Call.call_type != CALL_TYPE_LIVE)#排除直播
     total_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
     total = total_result.scalar() or 0
     result = await db.execute(

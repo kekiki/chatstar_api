@@ -1,0 +1,55 @@
+# fly.toml app configuration file generated for your-fastapi-ws
+# see https://fly.io/docs/reference/configuration/ for more information
+
+app = "Chatstar-API"
+primary_region = "sg" # sg=新加坡；也可以改成 hkg、sin、iad（美东）
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+PORT = "8080"
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = false # 重点！关闭自动休眠，WebSocket不能断
+auto_start_machines = true
+min_machines_running = 1
+max_machines_running = 1
+processes = ["app"]
+
+[[http_service.checks]]
+grace_period = "10s"
+interval = "30s"
+method = "GET"
+path = "/health"
+port = 8080
+timeout = "5s"
+protocol = "http"
+
+# 机型配置，shared-cpu-2x = 512MB，推荐这个跑ws
+#[vm]
+#size = "shared-cpu-2x"
+
+# 如果你想省成本，改成256MB（压力大容易OOM）
+[vm]
+size = "shared-cpu-1x"
+
+[[services]]
+protocol = "tcp"
+internal_port = 8080
+processes = ["app"]
+
+[[services.ports]]
+port = 80
+handlers = ["http"]
+
+[[services.ports]]
+port = 443
+handlers = ["tls", "http"]
+
+[services.concurrency]
+hard_limit = 50
+soft_limit = 40
+type = "connections"
