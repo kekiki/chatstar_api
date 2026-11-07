@@ -1,7 +1,7 @@
 # fly.toml app configuration file generated for your-fastapi-ws
 # see https://fly.io/docs/reference/configuration/ for more information
 
-app = "Chatstar-API"
+app = "chatstar_api"
 primary_region = "sg" # sg=新加坡；也可以改成 hkg、sin、iad（美东）
 
 [build]
