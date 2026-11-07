@@ -7,7 +7,7 @@ import random
 logger = logging.getLogger(__name__)
 
 # Groq模型配置
-MODEL_NAME = "llama-3.1-8b-instant"
+MODEL_NAME = "llama-3.2-3b-preview"
 MAX_TOKENS = 1024
 TEMPERATURE = 0.7
 

@@ -23,7 +23,7 @@ path = "/health"
 timeout = "5s"
 
 [vm]
-size = "shared-cpu-2x"
+size = "shared-cpu-1x"
 
 [[services]]
 protocol = "tcp"
