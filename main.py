@@ -37,10 +37,16 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+origins = [
+    "https://chatstarapp.xyz",
+    "https://www.chatstarapp.xyz",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产替换为你的前端域名
-    allow_credentials=False,  # 修复：origins="*" 与 credentials=True 组合无效；本项目使用 Bearer Token 无需 credentials
+    allow_origins=origins,  
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

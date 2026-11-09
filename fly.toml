@@ -24,21 +24,3 @@ timeout = "5s"
 
 [vm]
 size = "shared-cpu-1x"
-
-[[services]]
-protocol = "tcp"
-internal_port = 8080
-processes = ["app"]
-
-[[services.ports]]
-port = 80
-handlers = ["http"]
-
-[[services.ports]]
-port = 443
-handlers = ["tls", "http"]
-
-[services.concurrency]
-hard_limit = 50
-soft_limit = 40
-type = "connections"
