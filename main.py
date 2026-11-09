@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+# from fastapi.staticfiles import StaticFiles
 
 from app import models
 from app.config import HOST, PORT
@@ -17,19 +17,19 @@ from app.routers import auth, chat, orders, users, web, gifts, tasks, social, tr
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database tables on startup, start background refund polling."""
-    import asyncio
+    # import asyncio
 
     await init_db_tables()
-    from app.google_refund import start_refund_polling
+    # from app.google_refund import start_refund_polling
 
-    refund_task = start_refund_polling()
-    yield
-    if refund_task and not refund_task.done():
-        refund_task.cancel()
-        try:
-            await refund_task
-        except asyncio.CancelledError:
-            pass
+    # refund_task = start_refund_polling()
+    # yield
+    # if refund_task and not refund_task.done():
+    #     refund_task.cancel()
+    #     try:
+    #         await refund_task
+    #     except asyncio.CancelledError:
+    #         pass
 
 app = FastAPI(
     title="ChatStar API",
@@ -65,10 +65,10 @@ async def home():
 async def health_check():
     return {"status": "ok"}
 
-# ===================== Mount files =====================
-# static 
-app.mount("/static", StaticFiles(directory="web"), name="static")
-app.mount("/delete_account", StaticFiles(directory="web/delete_account", html=True), name="delete_account_static")
+# # ===================== Mount files =====================
+# # static 
+# app.mount("/static", StaticFiles(directory="web"), name="static")
+# app.mount("/delete_account", StaticFiles(directory="web/delete_account", html=True), name="delete_account_static")
 
 # ===================== Register routers =====================
 app.include_router(auth.router)
