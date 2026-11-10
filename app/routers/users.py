@@ -4,14 +4,14 @@ User information routes.
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import desc, asc, func, select
+from sqlalchemy import desc, asc, func, select, delete
 
 import random
 import datetime
 from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
-from app.models import Media, User, UserFollow, UserLike, GiftRecord, Gift
+from app.models import Media, User, UserFollow, UserLike, GiftRecord, Gift, ChatMessage, Call, TaskRecord, UserReport
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.translator import Translator
@@ -65,9 +65,24 @@ async def set_password(data: SetPasswordRequest, user: User = Depends(current_us
     user.password = get_hash(data.password)
     return {"code": 200, "data": {"message": "Password set successfully"}}
 
+async def _delete_user_related_records(db: AsyncSession, user_id: int):
+    """Delete records related to the user: chat messages, calls, task records and reports."""
+    await db.execute(delete(ChatMessage).where(
+        (ChatMessage.sender_id == user_id) | (ChatMessage.receiver_id == user_id)
+    ))
+    await db.execute(delete(Call).where(
+        (Call.user_id == user_id) | (Call.anchor_id == user_id)
+    ))
+    await db.execute(delete(TaskRecord).where(TaskRecord.user_id == user_id))
+    await db.execute(delete(UserReport).where(
+        (UserReport.user_id == user_id) | (UserReport.report_user_id == user_id)
+    ))
+
+
 @router.post("/user/deleteAccount")
 async def delete_account(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Delete the current user's account."""
+    await _delete_user_related_records(db, user.user_id)
     await db.delete(user)
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
@@ -82,6 +97,7 @@ async def delete_account_with_account_password(data: DeleteAccountWithAccountPas
     if not user.password or not verify_password(data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid password")
     
+    await _delete_user_related_records(db, user.user_id)
     await db.delete(user)
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
@@ -238,20 +254,21 @@ async def get_user_detail(
     gift_result = await db.execute(
         select(
             GiftRecord.gift_id,
-            GiftRecord.gift_name,
-            GiftRecord.gift_icon,
-            GiftRecord.gift_price,
+            Gift.gift_name,
+            Gift.gift_icon,
+            Gift.gift_price,
             GiftRecord.receiver_id,
             func.count(GiftRecord.id).label("num"),
         )
+        .join(Gift, Gift.id == GiftRecord.gift_id)
         .where(GiftRecord.receiver_id == user.user_id)
         .group_by(
             GiftRecord.gift_id,
-            GiftRecord.gift_name,
-            GiftRecord.gift_icon,
-            GiftRecord.gift_price,
+            Gift.gift_name,
+            Gift.gift_icon,
+            Gift.gift_price,
             GiftRecord.receiver_id,
-        ).order_by(GiftRecord.gift_price.desc())
+        ).order_by(Gift.gift_price.desc())
     )
     gift_map: dict[int, list] = {}
     for gift_id, gift_name, gift_icon, gift_price, receiver_id, gift_num in gift_result.all():
