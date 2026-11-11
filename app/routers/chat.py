@@ -23,7 +23,7 @@ from app.schemas import SendMessageRequest
 from app.security import current_user
 from app.tools import add_transaction, send_chat_message, send_userinfo_assets_notification, send_new_user_reward_notification, send_new_user_welcome_notification
 from app.ws_manager import ws_manager
-from app.greq_client import groq_client
+from app.openai_client import ai_client
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,7 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
                     history_msgs.append({"role": role, "content": r.content})
 
             ai_input = _build_ai_input(msg_type, content)
-            reply_text = await groq_client.chat_endpoint(content=ai_input, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
+            reply_text = await ai_client.chat_endpoint(content=ai_input, lang_code=lang_code, role_desc=role_desc, history_messages=history_msgs)
 
             if reply_text and len(reply_text) > 0:
                 await send_chat_message(db=db, sender_id=receiver_id, receiver_id=sender_id, msg_type='text', content=reply_text)
@@ -314,7 +314,7 @@ async def solicit_chat_task(user_id: int):
                             # 所以先取好所有需要的字段
                             anchor_user_id = anchor.user_id
                             anchor_lang = anchor.language_code
-                            text = await groq_client.chat_endpoint(
+                            text = await ai_client.chat_endpoint(
                                 content=random.choice(SOLICIT_OPENERS),
                                 # 主播资料是什么语言就一直用什么语言发消息
                                 lang_code=anchor_lang,

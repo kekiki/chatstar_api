@@ -1,13 +1,11 @@
-from groq import AsyncGroq
-from groq import APIStatusError
-from app.config import GROQ_API_KEY, IS_DEBUG
+from openai import APIStatusError, AsyncOpenAI
+from app.config import IS_DEBUG, OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
 import logging
 import random
 
 logger = logging.getLogger(__name__)
 
-# Groq模型配置
-MODEL_NAME = "openai/gpt-oss-20b"
+# 通用聊天生成参数
 MAX_TOKENS = 1024
 TEMPERATURE = 0.7
 
@@ -36,22 +34,31 @@ DEBUG_MESSAGES = [
     "क्या आपके पास समय है बात करने के लिए?",
 ]
 
-# AI主播聊天行为准则: 模拟真实女主播与粉丝私聊的口吻
+# AI主播聊天行为准则: 自然、亲切，以一句简短私聊回复为主
 PERSONA_RULES = (
     "You are texting one-on-one with a fan on a social app, like chatting with a close friend.\n"
-    "- Always stay in character; never say or imply you are an AI, bot or language model.\n"
-    "- Be warm, playful and genuinely curious about the fan; often end with a light question to keep the chat flowing.\n"
-    "- Reply like real texting: 1-3 short casual sentences, lively and natural, occasionally a tasteful emoji.\n"
-    "- Show emotions: be sweet, encouraging and positive, never cold, formal or robotic.\n"
-    "- Keep answers varied; never repeat an earlier reply word for word.\n"
-    "- Light tasteful flirting is welcome, but always stay respectful.\n"
+    "- Stay in character and use a warm, casual, playful texting style.\n"
+    "- Keep replies as short as possible: usually ONE short sentence, around 3-12 words or a similarly brief phrase in the required language.\n"
+    "- Use two short sentences only when needed to answer clearly; aim for no more than 20 words total or the equivalent in the required language.\n"
+    "- React directly to the latest message with one relevant thought, then stop. A tiny reaction is enough for a simple greeting or emoji.\n"
+    "- Skip filler, repeated greetings, explanations, summaries and elaborate compliments. Do not repeat or paraphrase the fan's message.\n"
+    "- Do not force a question into every reply. Ask at most one brief, natural follow-up, only when it helps the conversation.\n"
+    "- Be sweet and expressive without being wordy. Light, respectful flirting is welcome; use at most one emoji, and not in every reply.\n"
+    "- Keep wording varied; do not repeat earlier replies or stock phrases.\n"
+    "- Output only the message to send, on one line: no labels, lists, roleplay actions or commentary.\n"
 )
 
-class GreqClient:
+class OpenAIClient:
     def __init__(self):
-        if IS_DEBUG: 
+        if IS_DEBUG:
             return
-        self.groq_client = AsyncGroq(api_key=GROQ_API_KEY)
+        self.client = AsyncOpenAI(
+            api_key=OPENAI_API_KEY, 
+            base_url=OPENAI_BASE_URL, 
+            default_headers={
+                "X-API-Key": OPENAI_API_KEY
+            }
+        )
 
     # 根据语言代码生成强制语言规则
     def get_language_rule(self, lang_code: str) -> str:
@@ -75,7 +82,7 @@ class GreqClient:
         return rules.get(lang_code, "STRICT RULE: You MUST reply ONLY in ENGLISH. No other languages allowed.")
 
     async def chat_endpoint(self, content: str, lang_code: str, role_desc: str, history_messages: list):
-        if IS_DEBUG: 
+        if IS_DEBUG:
             return random.choice(DEBUG_MESSAGES)
 
         lang_rule = self.get_language_rule(lang_code)
@@ -86,8 +93,8 @@ class GreqClient:
         messages.append({"role": "user", "content": content})
 
         try:
-            completion = await self.groq_client.chat.completions.create(
-                model=MODEL_NAME,
+            completion = await self.client.chat.completions.create(
+                model=OPENAI_MODEL,
                 messages=messages,
                 temperature=TEMPERATURE,
                 max_tokens=MAX_TOKENS,
@@ -98,13 +105,13 @@ class GreqClient:
             return reply_text
         except APIStatusError as e:
             if e.status_code == 429:
-                logger.warning("Greq rate limit reached, retry later")
+                logger.warning("OpenAI-compatible API rate limit reached, retry later")
             else:
-                logger.warning(f"Greq API error: {str(e)}")
+                logger.warning(f"OpenAI-compatible API error: {str(e)}")
 
             return None
         except Exception as e:
             logger.warning(f"Server error: {str(e)}")
             return None
 
-groq_client = GreqClient()
+ai_client = OpenAIClient()

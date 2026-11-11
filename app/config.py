@@ -44,5 +44,7 @@ R2_BUCKET_NAME = get_env('R2_BUCKET_NAME')
 R2_ENDPOINT = get_env('R2_ENDPOINT')
 R2_PUBLIC_DOMAIN = get_env('R2_PUBLIC_DOMAIN')
 
-# GROQ AI
-GROQ_API_KEY = get_env('GROQ_API_KEY')
+# OpenAI 兼容 AI 服务（BASE_URL 为 API 根路径，例如 https://api.openai.com/v1）
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '') if IS_DEBUG else get_env('OPENAI_API_KEY')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
