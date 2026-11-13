@@ -220,7 +220,7 @@ SOLICIT_INITIAL_INTERVAL_RANGE = (60, 120) # 初始发送间隔(秒)
 SOLICIT_INTERVAL_GROWTH = 2.0              # 间隔增长系数: 连接越久频率越低
 SOLICIT_MAX_INTERVAL = 600                 # 最大间隔(秒)
 SOLICIT_RECENT_ANCHOR_LIMIT = 5            # 短期内不重复选取的主播数
-SOLICIT_MAX_PER_DAY = 13                   # 每个用户每天最多收到的话术条数
+SOLICIT_MAX_PER_DAY = 20                   # 每个用户每天最多收到的话术条数
 
 SOLICIT_OPENERS = [
     "You just noticed a fan you like is online. Send him a short sweet hello and invite him to chat with you now.",
