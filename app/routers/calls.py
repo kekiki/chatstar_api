@@ -51,7 +51,7 @@ async def createCall(
             user.balance = (user.balance or 0) - CREATE_MATCH_PRICE
             await add_transaction(user, -CREATE_MATCH_PRICE, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_MATCH, db=db)
         else:
-            raise HTTPException(status_code=2001, detail="Insufficient balance")
+            return {"code": 2001, "msg": "Insufficient balance"}
 
         media = random.choice(medias)
         result = await db.execute(select(User).where(User.user_id == media.user_id))
@@ -147,7 +147,7 @@ async def createCall(
             user.balance = (user.balance or 0) - anchor.call_price
             await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CALL, db=db)
         else:
-            raise HTTPException(status_code=2001, detail="Insufficient balance")
+            return {"code": 2001, "msg": "Insufficient balance"}
 
         media = random.choice(medias)
         call = Call(
@@ -194,7 +194,7 @@ async def renewCall(
                 call.updated_time = datetime.datetime.now()
                 call.is_paid = True
             else:
-                raise HTTPException(status_code=2001, detail="Insufficient balance")
+                return {"code": 2001, "msg": "Insufficient balance"}
     else:
         if call.is_ended:
             raise HTTPException(status_code=404, detail="Call did ended")
@@ -206,7 +206,7 @@ async def renewCall(
             call.updated_time = datetime.datetime.now()
             call.is_paid = True
         else:
-            raise HTTPException(status_code=2001, detail="Insufficient balance")
+            return {"code": 2001, "msg": "Insufficient balance"}
 
     return {
         "code": 200,
