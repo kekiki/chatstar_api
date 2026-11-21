@@ -78,7 +78,7 @@ async def send_message(
     if data.receiver_id == user.user_id:
         raise HTTPException(400, "cannot send message to yourself")
 
-    if data.call_id is None or not user.is_review:
+    if data.call_id is None and not user.is_review:
         if (user.chat_card_num or 0) > 0:
             user.chat_card_num -= 1
             await add_transaction(user, -1, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_CHAT, db=db)
