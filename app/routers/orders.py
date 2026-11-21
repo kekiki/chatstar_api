@@ -20,6 +20,7 @@ from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
 from app.tools import add_transaction
 from app.models.task import TYPE_RECHARGE_TIMES, TYPE_UNLOCK_VIP, TYPE_FIRST_RECHARGE
+from app.product_selection import get_product_for_order
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -153,11 +154,8 @@ async def verify_google_order(
         logger.warning("purchase token replay rejected, order_no=%s user_id=%s", data.order_no, user.user_id)
         raise HTTPException(status_code=409, detail="Purchase token already used")
 
-    # 商品必须属于对应包名
-    result_product = await db.execute(
-        select(Product).where(Product.sku == product_id, Product.package_name == package_name)
-    )
-    product = result_product.scalar_one_or_none()
+    # 商品按订单类型区分；同一 SKU 在数据库中可能有多种充值类型。
+    product = await get_product_for_order(db, order)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 

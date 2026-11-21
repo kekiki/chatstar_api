@@ -15,13 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import google_play
 from app.google_play import GooglePlayError
 from app.database import AsyncSessionLocal
-from app.models import Order, User, Product, AppList
+from app.models import Order, User, AppList
 from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_REFUNDED
 from app.models.transaction import (
     ASSET_DIAMOND, ASSET_VIP, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD,
     TRANSACTION_REFUND,
 )
 from app.tools import add_transaction
+from app.product_selection import get_product_for_order
 
 logger = logging.getLogger("google_refund")
 
@@ -92,10 +93,7 @@ async def _process_voided_token(purchase_token: str) -> Optional[dict]:
             if order.order_status != ORDER_STATUS_PAID:
                 return None
 
-            result_product = await db.execute(
-                select(Product).where(Product.sku == order.sku, Product.package_name == order.package_name)
-            )
-            product = result_product.scalar_one_or_none()
+            product = await get_product_for_order(db, order)
             if not product:
                 logger.error(
                     "refund: product not found for refunded order %s (sku=%s pkg=%s), skipping revoke",

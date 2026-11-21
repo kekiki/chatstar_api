@@ -15,7 +15,7 @@ class Product(Base):
     diamonds = Column(Integer, default=0)
     vip_days = Column(Integer, default=0)
     reward_diamonds = Column(Integer, default=0)
-    type = Column(Integer, default=0) # 0:普通商品折扣，1:首充折扣
+    type = Column(Integer, default=0) # 0:普通商品，1:首充商品，2:VIP商品
     discount = Column(Integer, default=100) # 折扣, 如75代表七五折
     currency_code = Column(String, default="USD")
     currency_price = Column(Float, default=0)
