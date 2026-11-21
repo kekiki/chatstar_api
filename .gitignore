@@ -59,3 +59,6 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+#防止密钥进入 Git 或 Docker 镜像
+app/secrets/
