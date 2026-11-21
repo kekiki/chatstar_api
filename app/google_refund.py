@@ -1,13 +1,11 @@
 """
 Google Play refund (voided purchase) handling.
 
-Polls the Play Developer API `purchases.voidedpurchases` endpoint for each
-package, matches voided purchase tokens against paid orders, and revokes the
-assets (diamonds / VIP days / cards) that were granted on verification.
+Processes voided purchase tokens received through RTDN or a manual processing
+pass, matches them against paid orders, and revokes the assets (diamonds / VIP
+days / cards) that were granted on verification.
 """
-import asyncio
 import logging
-import os
 import time
 from typing import Optional
 
@@ -27,8 +25,6 @@ from app.tools import add_transaction
 
 logger = logging.getLogger("google_refund")
 
-POLL_INTERVAL = int(os.getenv("GOOGLE_REFUND_POLL_INTERVAL", "21600"))
-POLL_ENABLED = os.getenv("GOOGLE_REFUND_POLL_ENABLED", "true").lower() in ("1", "true", "yes")
 MAX_PAGES_PER_PACKAGE = 5
 
 
@@ -127,7 +123,7 @@ async def handle_voided_purchase_token(purchase_token: str) -> Optional[dict]:
 
 
 async def process_refunds_once() -> dict:
-    """Run one polling pass over all packages. Safe to call repeatedly."""
+    """Run one manual refund reconciliation pass over all packages."""
     summary = {"packages": 0, "voided_checked": 0, "refunded": 0, "errors": 0, "details": []}
 
     async with AsyncSessionLocal() as db:
@@ -172,31 +168,3 @@ async def process_refunds_once() -> dict:
     return summary
 
 
-async def refund_polling_loop() -> None:
-    """Background task: periodically process Google refunds."""
-    logger.info("google refund polling enabled, interval=%ss", POLL_INTERVAL)
-    # 首轮延迟启动，避开应用启动高峰
-    await asyncio.sleep(30)
-    while True:
-        try:
-            summary = await process_refunds_once()
-            if summary["refunded"] or summary["errors"]:
-                logger.info("refund pass: %s", summary)
-        except Exception:
-            logger.exception("refund polling pass failed")
-        await asyncio.sleep(POLL_INTERVAL)
-
-
-def start_refund_polling() -> Optional[asyncio.Task]:
-    """Start the refund polling background task if enabled and configured."""
-    if not POLL_ENABLED:
-        logger.info("google refund polling disabled by GOOGLE_REFUND_POLL_ENABLED")
-        return None
-
-    sa_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
-    static_token = os.environ.get("GOOGLE_ACCESS_TOKEN")
-    if not ((sa_file and os.path.exists(sa_file)) or static_token):
-        logger.warning("google refund polling disabled: no GOOGLE_SERVICE_ACCOUNT_FILE / GOOGLE_ACCESS_TOKEN configured")
-        return None
-
-    return asyncio.create_task(refund_polling_loop())

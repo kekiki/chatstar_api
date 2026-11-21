@@ -41,8 +41,8 @@ async def receive_rtdn(request: Request):
     """Handle a Google Play RTDN push notification.
 
     Responds 200 quickly; unknown/unmatchable notifications are acknowledged
-    silently (the refund polling loop remains the fallback), while unexpected
-    processing errors surface as 500 so Pub/Sub retries with backoff.
+    silently, while unexpected processing errors surface as 500 so Pub/Sub
+    retries with backoff.
     """
     secret = os.environ.get("RTDN_SECRET")
     if not secret:
