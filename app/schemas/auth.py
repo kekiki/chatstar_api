@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 class UserAgent(object):
     """
@@ -19,13 +19,15 @@ class GoogleAttribution(BaseModel):
     """
     Google attribution request schema
     """
-    install_referrer: str
-    referrer_click_timestamp_seconds: int
-    install_begin_timestamp_seconds: int
-    referrer_click_timestamp_server_seconds: int
-    install_begin_timestamp_server_seconds: int
-    install_version: str
-    google_play_instant: bool = False
+    model_config = ConfigDict(populate_by_name=True)
+
+    install_referrer: str = Field(alias="installReferrer")
+    referrer_click_timestamp_seconds: int = Field(alias="referrerClickTimestampSeconds")
+    install_begin_timestamp_seconds: int = Field(alias="installBeginTimestampSeconds")
+    referrer_click_timestamp_server_seconds: int = Field(alias="referrerClickTimestampServerSeconds")
+    install_begin_timestamp_server_seconds: int = Field(alias="installBeginTimestampServerSeconds")
+    install_version: str = Field(alias="installVersion")
+    google_play_instant: bool = Field(default=False, alias="googlePlayInstant")
 
 class GoogleUserInfo(BaseModel):
     """
