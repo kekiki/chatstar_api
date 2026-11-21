@@ -12,6 +12,7 @@ boto3
 asyncpg
 httpx
 botocore
+requests
 python-dotenv
 greenlet
 # googletrans-py==4.0.0
