@@ -78,14 +78,15 @@ async def send_message(
     if data.receiver_id == user.user_id:
         raise HTTPException(400, "cannot send message to yourself")
 
-    if (user.chat_card_num or 0) > 0:
-        user.chat_card_num -= 1
-        await add_transaction(user, -1, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_CHAT, db=db)
-    elif (user.balance or 0) >= CHAT_MESSAGE_DIAMOND_COST:
-        user.balance -= CHAT_MESSAGE_DIAMOND_COST
-        await add_transaction(user, -CHAT_MESSAGE_DIAMOND_COST, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CHAT, db=db)
-    else:
-        return {"code": 2001, "msg": "Insufficient balance"}
+    if data.call_id is None or not user.is_review:
+        if (user.chat_card_num or 0) > 0:
+            user.chat_card_num -= 1
+            await add_transaction(user, -1, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_CHAT, db=db)
+        elif (user.balance or 0) >= CHAT_MESSAGE_DIAMOND_COST:
+            user.balance -= CHAT_MESSAGE_DIAMOND_COST
+            await add_transaction(user, -CHAT_MESSAGE_DIAMOND_COST, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CHAT, db=db)
+        else:
+            return {"code": 2001, "msg": "Insufficient balance"}
 
     content = await _build_content(db, data)
     message = ChatMessage(

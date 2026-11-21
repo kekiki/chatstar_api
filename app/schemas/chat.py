@@ -9,4 +9,5 @@ class SendMessageRequest(BaseModel):
     media_url: Optional[str] = None      # image/video 资源地址
     media_cover: Optional[str] = None    # video 封面
     gift_id: Optional[int] = None        # gift 消息礼物ID
+    call_id: Optional[int] = None        # 通话ID
     gift_count: int = 1
