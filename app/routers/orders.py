@@ -96,18 +96,50 @@ async def get_user_orders(
 
 
 @router.post("/order/verify")
-async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def verify_google_order(
+    request: Request,
+    data: VerifyGoogleRequest,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Verify a Google Play in-app purchase and update order status.
 
     Requires `GOOGLE_SERVICE_ACCOUNT_FILE` (recommended) or `GOOGLE_ACCESS_TOKEN`
     env var to be configured. Purchase tokens are bound to orders with a unique
     constraint so the same Google purchase can never be replayed on another order.
     """
-    # 订单必须存在且属于当前用户
-    result_order = await db.execute(select(Order).where(Order.order_no == data.order_no, Order.user_id == user.user_id))
+    if not data.order_no and not data.transaction_no:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing orderNo or transactionNo; the app must send the order reference",
+        )
+
+    # 订单必须存在且属于当前用户。transaction_no is passed to Google as
+    # obfuscatedProfileId and survives delayed purchase callbacks.
+    order_filters = [Order.user_id == user.user_id]
+    if data.order_no:
+        order_filters.append(Order.order_no == data.order_no)
+    if data.transaction_no:
+        order_filters.append(Order.transaction_no == data.transaction_no)
+    result_order = await db.execute(select(Order).where(*order_filters))
     order = result_order.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    header_package_name = request.headers.get("package-name")
+    if header_package_name and data.package_name and header_package_name != data.package_name:
+        raise HTTPException(status_code=400, detail="Package header does not match the request")
+
+    product_id = data.product_id or order.sku
+    package_name = data.package_name or header_package_name or order.package_name
+
+    if data.product_id and order.sku != data.product_id:
+        logger.warning("sku mismatch rejected, order_no=%s order_sku=%s product_id=%s", order.order_no, order.sku, data.product_id)
+        raise HTTPException(status_code=400, detail="Product does not match the order")
+
+    if package_name != order.package_name:
+        logger.warning("package mismatch rejected, order_no=%s order_package=%s package_name=%s", order.order_no, order.package_name, package_name)
+        raise HTTPException(status_code=400, detail="Package does not match the order")
 
     # 幂等保护：已验证成功的订单不重复发放奖励
     if order.order_status == ORDER_STATUS_PAID:
@@ -121,14 +153,9 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
         logger.warning("purchase token replay rejected, order_no=%s user_id=%s", data.order_no, user.user_id)
         raise HTTPException(status_code=409, detail="Purchase token already used")
 
-    # 订单 sku 必须与实际购买的商品一致，防止下单与发货脱钩
-    if order.sku != data.product_id:
-        logger.warning("sku mismatch rejected, order_no=%s order_sku=%s product_id=%s", data.order_no, order.sku, data.product_id)
-        raise HTTPException(status_code=400, detail="Product does not match the order")
-
     # 商品必须属于对应包名
     result_product = await db.execute(
-        select(Product).where(Product.sku == data.product_id, Product.package_name == data.package_name)
+        select(Product).where(Product.sku == product_id, Product.package_name == package_name)
     )
     product = result_product.scalar_one_or_none()
     if not product:
@@ -136,7 +163,7 @@ async def verify_google_order(data: VerifyGoogleRequest, user: User = Depends(cu
 
     # 调 Google Play Developer API 验证购买
     try:
-        result = await google_play.verify_purchase(data.package_name, data.product_id, data.purchase_token)
+        result = await google_play.verify_purchase(package_name, product_id, data.purchase_token)
     except GooglePlayError as e:
         logger.error("google verify failed order_no=%s: %s", data.order_no, e)
         raise HTTPException(status_code=502, detail="Google purchase verification failed")
