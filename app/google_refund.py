@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import google_play
 from app.google_play import GooglePlayError
 from app.database import AsyncSessionLocal
-from app.models import Order, User, AppList
+from app.models import Order, User, Product, AppList
 from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_REFUNDED
 from app.models.transaction import (
     ASSET_DIAMOND, ASSET_VIP, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD,
