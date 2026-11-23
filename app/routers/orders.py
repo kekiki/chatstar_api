@@ -213,17 +213,20 @@ async def verify_google_order(
         await add_task_progress(db, user.user_id, task_type, 1)
         if user.total == 0:
             await add_task_progress(db, user.user_id, TYPE_FIRST_RECHARGE, 1)
-        
+
+        noti_msg = 'Congratulations! Your recharge was successful.'
         user.balance = (user.balance or 0) + (product.diamonds or 0)
         if product.diamonds and product.diamonds > 0:
             await add_transaction(user, product.diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_PURCHASE, db=db)
             user.total = (user.total or 0) + product.diamonds
+            noti_msg = f'Congratulations! The {product.diamonds} diamonds you purchased have also been credited to your account.'
 
         if product.vip_days and product.vip_days > 0:
             current_expire = user.vip_expire_time or now_ts
             base = max(current_expire, now_ts)
             user.vip_expire_time = base + product.vip_days * 86400
             await add_transaction(user, product.vip_days, asset_type=ASSET_VIP, transaction_type=TRANSACTION_PURCHASE, db=db)
+            noti_msg = f'Congratulations! The {product.vip_days}-day VIP subscription you purchased has been credited to your account.'
 
         if product.call_card_num and product.call_card_num > 0:
             user.call_card_num = (user.call_card_num or 0) + product.call_card_num
@@ -238,7 +241,6 @@ async def verify_google_order(
             await add_transaction(user, product.chat_card_num, asset_type=ASSET_CHAT_CARD, transaction_type=TRANSACTION_PURCHASE, db=db)
         
         from app.tools import send_system_chat_message
-        noti_msg = 'Congratulations! Your recharge was successful. '
         await send_system_chat_message(db,user.user_id,noti_msg)
 
         verified = True
