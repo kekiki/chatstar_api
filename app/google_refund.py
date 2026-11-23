@@ -49,11 +49,15 @@ async def _revoke_order_assets(db: AsyncSession, order: Order, product: Product)
 
     now_ts = int(time.time())
 
-    if product.diamonds and product.diamonds > 0:
-        available = user.balance or 0
-        revoked = min(available, product.diamonds)
-        user.balance = available - revoked
+    diamond_grant = order.google_granted_diamonds
+    if diamond_grant is None:
+        # Old orders only received the base amount and have no snapshot.
+        diamond_grant = product.diamonds or 0
+    if diamond_grant > 0:
+        available = max(0, user.balance or 0)
+        revoked = min(available, diamond_grant)
         if revoked > 0:
+            user.balance = available - revoked
             await add_transaction(user, -revoked, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_REFUND, db=db)
 
     if product.vip_days and product.vip_days > 0:
@@ -86,7 +90,9 @@ async def _process_voided_token(purchase_token: str) -> Optional[dict]:
     """Revoke assets for a single voided purchase token. Returns a summary dict."""
     async with AsyncSessionLocal() as db:
         try:
-            result = await db.execute(select(Order).where(Order.purchase_token == purchase_token))
+            result = await db.execute(
+                select(Order).where(Order.purchase_token == purchase_token).with_for_update()
+            )
             order = result.scalar_one_or_none()
             if not order:
                 return None

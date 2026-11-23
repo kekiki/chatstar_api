@@ -35,6 +35,8 @@ class Order(Base):
     # Google Play 购买凭据，唯一索引防止同一笔购买在多个订单上重放
     purchase_token = Column(String, unique=True, index=True)
     google_order_id = Column(String, index=True)
+    # 实际到账的购买及赠送钻石总数；NULL 表示上线前的旧订单。
+    google_granted_diamonds = Column(Integer, nullable=True)
 
     def isVip(self):
         return self.type == 2

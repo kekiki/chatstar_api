@@ -70,8 +70,8 @@ Base = declarative_base()
 def _upgrade_pay_orders(sync_conn) -> None:
     """Lightweight startup migration: add Google Play columns to existing tables.
 
-    `create_all` does not alter existing tables, so add the purchase_token /
-    google_order_id columns and their indexes manually (idempotent).
+    `create_all` does not alter existing tables, so add the Google Play
+    columns and indexes manually (idempotent).
     """
     from sqlalchemy import inspect, text
 
@@ -83,6 +83,8 @@ def _upgrade_pay_orders(sync_conn) -> None:
         sync_conn.execute(text("ALTER TABLE pay_orders ADD COLUMN purchase_token VARCHAR"))
     if "google_order_id" not in columns:
         sync_conn.execute(text("ALTER TABLE pay_orders ADD COLUMN google_order_id VARCHAR"))
+    if "google_granted_diamonds" not in columns:
+        sync_conn.execute(text("ALTER TABLE pay_orders ADD COLUMN google_granted_diamonds INTEGER"))
     sync_conn.execute(
         text("CREATE UNIQUE INDEX IF NOT EXISTS ix_pay_orders_purchase_token ON pay_orders (purchase_token)")
     )

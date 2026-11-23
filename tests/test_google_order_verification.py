@@ -1,9 +1,11 @@
+import asyncio
 import os
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -69,6 +71,7 @@ class GoogleOrderVerificationTests(unittest.TestCase):
         self.assertEqual(self.user.balance, 10)
         self.assertEqual(self.order.order_status, 0)
         self.assertIsNone(self.order.purchase_token)
+        self.assertIsNone(self.order.google_granted_diamonds)
         self.add_transaction.assert_not_awaited()
 
     def test_matching_profile_id_fulfills_order_without_client_sku(self):
@@ -81,8 +84,114 @@ class GoogleOrderVerificationTests(unittest.TestCase):
         self.assertEqual(self.user.balance, 110)
         self.assertEqual(self.order.order_status, self.orders.ORDER_STATUS_PAID)
         self.assertEqual(self.order.purchase_token, "test-token")
+        self.assertEqual(self.order.google_granted_diamonds, 100)
         self.lookup_product.assert_awaited_once_with(self.db, self.order)
         self.verify.assert_awaited_once_with(self.order.package_name, self.order.sku, "test-token")
+
+    def test_bonus_only_product_writes_diamond_transaction(self):
+        self.product.diamonds = 0
+        self.product.reward_diamonds = 25
+        self.set_google_purchase(obfuscatedExternalProfileId=self.order.transaction_no)
+
+        response = self.verify_order()
+
+        self.assertTrue(response.json()["data"]["verified"])
+        self.assertEqual(self.user.balance, 35)
+        self.assertEqual(self.user.total, 35)
+        self.assertEqual(self.order.google_granted_diamonds, 25)
+        self.add_transaction.assert_awaited_once_with(
+            self.user, 25, asset_type=self.orders.ASSET_DIAMOND,
+            transaction_type=self.orders.TRANSACTION_PURCHASE, db=self.db,
+        )
+
+    def test_purchase_and_refund_use_same_amount_including_bonus(self):
+        from app import google_refund
+
+        self.product.reward_diamonds = 25
+        self.set_google_purchase(obfuscatedExternalProfileId=self.order.transaction_no)
+        response = self.verify_order()
+
+        self.assertTrue(response.json()["data"]["verified"])
+        self.assertEqual(self.user.balance, 135)
+        self.assertEqual(self.user.total, 135)
+        self.assertEqual(self.order.google_granted_diamonds, 125)
+        self.add_transaction.assert_awaited_once_with(
+            self.user, 125, asset_type=self.orders.ASSET_DIAMOND,
+            transaction_type=self.orders.TRANSACTION_PURCHASE, db=self.db,
+        )
+
+        self.product.diamonds = 90
+        self.product.reward_diamonds = 120
+        refund_db = Mock(spec=AsyncSession)
+        user_result = Mock()
+        user_result.scalar_one_or_none.return_value = self.user
+        refund_db.execute.side_effect = [self.order_result, user_result, self.order_result]
+        session = MagicMock()
+        session.__aenter__.return_value = refund_db
+
+        async def refund_twice():
+            detail = await google_refund.handle_voided_purchase_token("test-token")
+            self.assertEqual(detail["order_no"], self.order.order_no)
+            self.assertIsNone(await google_refund.handle_voided_purchase_token("test-token"))
+
+        with (
+            patch.object(google_refund, "AsyncSessionLocal", return_value=session),
+            patch.object(google_refund, "get_product_for_order", return_value=self.product),
+            patch.object(google_refund, "add_transaction") as refund_transaction,
+        ):
+            asyncio.run(refund_twice())
+
+        self.assertEqual(self.user.balance, 10)
+        self.assertEqual(self.order.order_status, google_refund.ORDER_STATUS_REFUNDED)
+        refund_db.commit.assert_awaited_once()
+        refund_transaction.assert_awaited_once_with(
+            self.user, -125, asset_type=google_refund.ASSET_DIAMOND,
+            transaction_type=google_refund.TRANSACTION_REFUND, db=refund_db,
+        )
+
+        self.db.execute.side_effect = [self.order_result]
+        self.assertEqual(self.verify_order().status_code, 409)
+        self.assertEqual(self.user.balance, 10)
+        self.add_transaction.assert_awaited_once()
+
+    def test_refund_respects_legacy_orders_zero_grants_and_available_balance(self):
+        from app import google_refund
+
+        self.product.reward_diamonds = 25
+        user_result = Mock()
+        user_result.scalar_one_or_none.return_value = self.user
+        self.db.execute.side_effect = None
+        self.db.execute.return_value = user_result
+
+        for grant, balance, deduction in [(None, 150, 100), (0, 150, 0), (125, 20, 20)]:
+            with self.subTest(grant=grant, balance=balance):
+                self.order.google_granted_diamonds = grant
+                self.user.balance = balance
+                with patch.object(google_refund, "add_transaction") as refund_transaction:
+                    asyncio.run(google_refund._revoke_order_assets(self.db, self.order, self.product))
+                self.assertEqual(self.user.balance, balance - deduction)
+                if deduction:
+                    refund_transaction.assert_awaited_once_with(
+                        self.user, -deduction, asset_type=google_refund.ASSET_DIAMOND,
+                        transaction_type=google_refund.TRANSACTION_REFUND, db=self.db,
+                    )
+                else:
+                    refund_transaction.assert_not_awaited()
+
+    def test_migration_leaves_existing_diamond_grant_null(self):
+        from app.database import _upgrade_pay_orders
+
+        engine = create_engine("sqlite://")
+        self.addCleanup(engine.dispose)
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE pay_orders (id INTEGER PRIMARY KEY, purchase_token VARCHAR, google_order_id VARCHAR)"))
+            conn.execute(text("INSERT INTO pay_orders (id) VALUES (1)"))
+            _upgrade_pay_orders(conn)
+            _upgrade_pay_orders(conn)
+
+            columns = {column["name"]: column for column in inspect(conn).get_columns("pay_orders")}
+            self.assertTrue(columns["google_granted_diamonds"]["nullable"])
+            self.assertEqual(conn.execute(text("SELECT google_granted_diamonds FROM pay_orders")).one(), (None,))
 
     def test_mismatched_profile_id_never_fulfills_even_with_legacy_cutoff(self):
         self.set_google_purchase(obfuscatedExternalProfileId="other-order", purchaseTimeMillis="101000")

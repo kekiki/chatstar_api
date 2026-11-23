@@ -15,7 +15,7 @@ from app import google_play
 from app.google_play import GooglePlayError
 from app.database import get_db, get_db_readonly
 from app.models import Order, User, Product
-from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_FAILED
+from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_FAILED, ORDER_STATUS_REFUNDED
 from app.models.transaction import ASSET_DIAMOND, ASSET_VIP, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD, TRANSACTION_PURCHASE
 from app.schemas.orders import CreateOrderRequest, VerifyGoogleRequest
 from app.security import current_user, current_user_readonly
@@ -139,7 +139,7 @@ async def verify_google_order(
         order_filters.append(Order.order_no == data.order_no)
     if data.transaction_no:
         order_filters.append(Order.transaction_no == data.transaction_no)
-    result_order = await db.execute(select(Order).where(*order_filters))
+    result_order = await db.execute(select(Order).where(*order_filters).with_for_update())
     order = result_order.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -158,6 +158,9 @@ async def verify_google_order(
     if package_name != order.package_name:
         logger.warning("package mismatch rejected, order_no=%s order_package=%s package_name=%s", order.order_no, order.package_name, package_name)
         raise HTTPException(status_code=400, detail="Package does not match the order")
+
+    if order.order_status == ORDER_STATUS_REFUNDED:
+        raise HTTPException(status_code=409, detail="Order has already been refunded")
 
     # 仅同一个已验证的 token 可走幂等返回，避免客户端误消耗其他购买。
     if order.order_status == ORDER_STATUS_PAID:
@@ -202,9 +205,12 @@ async def verify_google_order(
     now_ts = int(time.time())
 
     if purchase_state == google_play.PURCHASE_STATE_PURCHASED:
+        purchased_diamonds = max(0, product.diamonds or 0)
+        granted_diamonds = purchased_diamonds + max(0, product.reward_diamonds or 0)
         order.order_status = ORDER_STATUS_PAID
         order.purchase_token = data.purchase_token
         order.google_order_id = result.get("orderId") or ""
+        order.google_granted_diamonds = granted_diamonds
         order.updated_time = now_ts
         db.add(order)
         
@@ -215,11 +221,12 @@ async def verify_google_order(
             await add_task_progress(db, user.user_id, TYPE_FIRST_RECHARGE, 1)
 
         noti_msg = 'Congratulations! Your recharge was successful.'
-        user.balance = (user.balance or 0) + (product.diamonds or 0)
-        if product.diamonds and product.diamonds > 0:
-            await add_transaction(user, product.diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_PURCHASE, db=db)
-            user.total = (user.total or 0) + product.diamonds
-            noti_msg = f'Congratulations! The {product.diamonds} diamonds you purchased have also been credited to your account.'
+        if granted_diamonds > 0:
+            user.balance = (user.balance or 0) + granted_diamonds
+            user.total = (user.total or 0) + granted_diamonds
+            await add_transaction(user, granted_diamonds, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_PURCHASE, db=db)
+        if purchased_diamonds > 0:
+            noti_msg = f'Congratulations! The {purchased_diamonds} diamonds you purchased have also been credited to your account.'
 
         if product.vip_days and product.vip_days > 0:
             current_expire = user.vip_expire_time or now_ts
