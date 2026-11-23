@@ -94,8 +94,8 @@ async def _google_api_get(url: str, params: Optional[dict] = None) -> dict:
     try:
         client = await get_http_client()
         resp = await client.get(url, headers=headers, params=params)
-    except Exception as e:
-        logger.exception("HTTP request to Google failed: %s", e)
+    except httpx.HTTPError as e:
+        logger.error("HTTP request to Google failed: %s", type(e).__name__)
         raise GooglePlayError("HTTP request to Google failed")
 
     if resp.status_code == 401:
@@ -106,7 +106,8 @@ async def _google_api_get(url: str, params: Optional[dict] = None) -> dict:
             _cached_token_expiry = 0.0
 
     if resp.status_code != 200:
-        logger.error("Google API failed url=%s status=%s body=%s", url, resp.status_code, resp.text)
+        # Purchase tokens appear in verification URLs and can be echoed in errors.
+        logger.error("Google API failed with status=%s", resp.status_code)
         raise GooglePlayError(f"Google API request failed: {resp.status_code}", status_code=resp.status_code)
 
     try:
@@ -122,21 +123,23 @@ async def verify_purchase(package_name: str, product_id: str, purchase_token: st
     return await _google_api_get(url)
 
 
+async def get_order(package_name: str, google_order_id: str) -> dict:
+    """Read the payment state of a specific Google Play order."""
+    return await _google_api_get(f"{BASE_URL}/applications/{package_name}/orders/{google_order_id}")
+
+
 async def list_voided_purchases(
     package_name: str,
     page_token: Optional[str] = None,
     max_results: int = 200,
-    include_completed_transactions: bool = True,
 ) -> dict:
     """List voided (refunded/revoked) purchases for an app.
 
     Returns the raw Google response containing `voidedPurchases` and
-    optionally `pageInfo.nextPageToken`.
+    optionally `tokenPagination.nextPageToken`. Partial refunds are excluded.
     """
-    params = {"maxResults": max_results}
+    params = {"maxResults": max_results, "includeQuantityBasedPartialRefund": "false"}
     if page_token:
         params["token"] = page_token
-    if include_completed_transactions:
-        params["includeCompletedTransactions"] = "true"
     url = f"{BASE_URL}/applications/{package_name}/purchases/voidedpurchases"
     return await _google_api_get(url, params=params)

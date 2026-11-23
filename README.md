@@ -31,6 +31,19 @@ OPENAI_MODEL=gpt-4o-mini
 只有后台订单创建时间和 Google 返回的购买时间都严格早于该时间点，才允许按旧流程补单。
 没有确认过切换时间时，保持该变量不设置。
 
+### 退款通知与补单
+
+- Play Console 手动退款时，若希望自动回收道具或 VIP，使用同时撤销购买的选项。仅退款的订单可能不会出现在 Google 的作废购买列表里。
+- 在 Play Console 发送 RTDN 测试通知，并确认 Fly 日志有 `rtdn: test notification received`。后端直连测试不能替代 Pub/Sub 投递检查。
+- 成功回收时，后端保存一条系统消息；有钻石扣回时，消息显示实际扣除的数量。重复通知不会重复扣回或保存消息。
+- 对于已退款、且确实需要撤销权益但未自动处理的单笔订单，可在具备数据库和 Google Play 凭据的后端环境运行：
+
+  ```bash
+  python -m scripts.reconcile_google_refund <后台订单号> --confirm-revoke
+  ```
+
+  脚本会向 Google 核对原订单和购买凭据，只处理确认全额退款、且本地仍是已支付的订单。不会再次向 Google 发起退款，也不会开启轮询。
+
 ## 在虚拟环境运行项目
 
 1.进入你的项目文件夹
