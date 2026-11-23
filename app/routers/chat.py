@@ -16,6 +16,7 @@ from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ALGORITHM, SECRET_KEY
+from app.logging_config import log_event
 from app.database import AsyncSessionLocal, get_db
 from app.models import Gift, User, ChatMessage
 from app.models.transaction import ASSET_DIAMOND, ASSET_CHAT_CARD, TRANSACTION_CHAT, TRANSACTION_NEW_REWARD, ASSET_CALL_CARD, ASSET_MATCH_CARD
@@ -173,11 +174,9 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
             result = await db.execute(select(User).where(User.user_id == receiver_id))
             anchor = result.scalar_one_or_none()
             if not anchor:
-                # logger.warning("AI reply skipped, receiver not found user_id=%s", receiver_id)
                 return
 
             if anchor.is_review:
-                # logger.warning("AI reply skipped, receiver offline user_id=%s", receiver_id)
                 return
 
             lang_code = anchor.language_code
@@ -195,7 +194,7 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
             )
             messages = result.scalars().all()
             if len(messages) > 0 and messages[-1].sender_id == sender_id:
-                logger.warning("AI reply skipped, last message is yours")
+                log_event(logger, logging.DEBUG, "chat.ai_reply.skipped", user_id=sender_id, reason="already_replied")
                 return
 
             history_msgs = []
@@ -210,8 +209,8 @@ async def background_chat_task(sender_id: int, receiver_id: int, content: str, b
             if reply_text and len(reply_text) > 0:
                 await send_chat_message(db=db, sender_id=receiver_id, receiver_id=sender_id, msg_type='text', content=reply_text)
             await db.commit()
-    except Exception as e:
-        logger.exception("chat AI reply background task failed: %s", e)
+    except Exception:
+        log_event(logger, logging.ERROR, "chat.ai_reply.failed", user_id=sender_id, exc_info=True)
 
 
 # ---------- 话术任务: 用户 WS 在线时由随机主播主动发消息引导聊天 ----------
@@ -329,9 +328,9 @@ async def solicit_chat_task(user_id: int):
                                 recent_anchor_ids.add(anchor_user_id)
                                 if len(recent_anchor_ids) > SOLICIT_RECENT_ANCHOR_LIMIT:
                                     recent_anchor_ids.pop()
-            except Exception as e:
+            except Exception:
                 # 单轮失败不终止任务, 等下一轮重试
-                logger.exception("solicit chat round failed user_id=%s: %s", user_id, e)
+                log_event(logger, logging.ERROR, "chat.solicit.failed", user_id=user_id, exc_info=True)
             interval = min(interval * SOLICIT_INTERVAL_GROWTH, SOLICIT_MAX_INTERVAL)
             await asyncio.sleep(random.uniform(interval * 0.8, interval * 1.2))
     except asyncio.CancelledError:
@@ -461,10 +460,12 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
     """
     user_id = _decode_ws_token(token)
     if not user_id:
+        log_event(logger, logging.WARNING, "websocket.rejected", reason="invalid_token")
         await websocket.close(code=4401)
         return
     await websocket.accept()
     await ws_manager.connect(user_id, websocket)
+    log_event(logger, logging.INFO, "websocket.connected", user_id=user_id)
     # 启动话术任务(多端连接复用同一个)
     task = _solicit_tasks.get(user_id)
     if task is None or task.done():
@@ -525,7 +526,7 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_IDLE_TIMEOUT)
             except asyncio.TimeoutError:
-                logger.info("ws idle timeout, closing user_id=%s", user_id)
+                log_event(logger, logging.INFO, "websocket.idle_timeout", user_id=user_id)
                 # await websocket.close(code=1001)
                 break
             ack = await _handle_ws_action(user_id, raw)
@@ -533,7 +534,7 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
     except WebSocketDisconnect:
         pass
     except Exception:
-        logger.exception("ws connection error user_id=%s", user_id)
+        log_event(logger, logging.ERROR, "websocket.failed", user_id=user_id, exc_info=True)
     finally:
         await ws_manager.disconnect(user_id, websocket)
         # 用户所有连接都断开后, 取消话术任务

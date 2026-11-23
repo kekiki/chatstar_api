@@ -47,7 +47,7 @@ class Order(Base):
             status = ORDER_STATUS_FAILED
         return {
             "id": self.id,
-            "order_no": self.order_no,
+            "order_no": self.google_order_id if self.google_order_id else self.order_no,
             "transaction_no": self.transaction_no,
             "created_time": self.created_time,
             "updated_time": self.updated_time,

@@ -96,7 +96,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
-CMD ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000", "--workers", "1", "--ws-ping-interval", "20", "--ws-ping-timeout", "60"]
+CMD ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000", "--workers", "1", "--no-access-log", "--ws-ping-interval", "20", "--ws-ping-timeout", "60"]
 EOF
 
 # docker-compose.yml

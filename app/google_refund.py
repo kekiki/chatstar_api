@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import google_play
 from app.google_play import GooglePlayError
+from app.logging_config import log_event
 from app.database import AsyncSessionLocal
 from app.models import Order, User, Product, AppList
 from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_REFUNDED
@@ -24,7 +25,7 @@ from app.models.transaction import (
 from app.tools import add_transaction, send_system_chat_message
 from app.product_selection import get_product_for_order
 
-logger = logging.getLogger("uvicorn.error.google_refund")
+logger = logging.getLogger(__name__)
 
 MAX_PAGES_PER_PACKAGE = 5
 
@@ -44,6 +45,8 @@ async def _revoke_order_assets(db: AsyncSession, order: Order, product: Product)
     result = await db.execute(select(User).where(User.user_id == order.user_id).with_for_update())
     user = result.scalar_one_or_none()
     if not user:
+        log_event(logger, logging.ERROR, "refund.failed", reason="user_not_found", order_no=order.order_no,
+                  google_order_id=order.google_order_id, user_id=order.user_id)
         raise RuntimeError(f"Refund user not found for order {order.order_no}")
 
     now_ts = int(time.time())
@@ -86,7 +89,9 @@ async def _revoke_order_assets(db: AsyncSession, order: Order, product: Product)
     return diamonds_revoked
 
 
-async def _process_voided_token(purchase_token: str, package_name: str | None = None) -> Optional[dict]:
+async def _process_voided_token(
+    purchase_token: str, package_name: str | None = None, google_order_id: str | None = None,
+) -> Optional[dict]:
     """Revoke assets for a single voided purchase token. Returns a summary dict."""
     async with AsyncSessionLocal() as db:
         try:
@@ -95,17 +100,34 @@ async def _process_voided_token(purchase_token: str, package_name: str | None = 
             )
             order = result.scalar_one_or_none()
             if not order:
-                logger.info("refund: no local order matched the Google purchase, package=%s", package_name)
+                log_event(logger, logging.WARNING, "refund.skipped", reason="order_not_found",
+                          package_name=package_name, google_order_id=google_order_id)
                 return None
+            context = {"order_no": order.order_no, "user_id": order.user_id, "sku": order.sku,
+                       "package_name": order.package_name, "google_order_id": order.google_order_id or google_order_id}
             if package_name is not None and order.package_name != package_name:
-                logger.warning("refund: package mismatch for order %s, package=%s", order.order_no, package_name)
+                log_event(logger, logging.WARNING, "refund.skipped", reason="package_mismatch", **context)
                 return None
-            if order.order_status != ORDER_STATUS_PAID:
-                logger.info("refund: skipping order %s with status %s", order.order_no, order.order_status)
+            if order.order_status not in (ORDER_STATUS_PAID, ORDER_STATUS_REFUNDED):
+                log_event(logger, logging.INFO, "refund.skipped", reason="order_not_paid", order_status=order.order_status, **context)
+                return None
+            if google_order_id and order.google_order_id and google_order_id != order.google_order_id:
+                log_event(logger, logging.WARNING, "refund.skipped", reason="google_order_id_mismatch", **context)
+                return None
+
+            backfill_google_id = bool(google_order_id and not order.google_order_id)
+            if backfill_google_id:
+                order.google_order_id = google_order_id
+            if order.order_status == ORDER_STATUS_REFUNDED:
+                if backfill_google_id:
+                    # A later notification may supply the ID without changing the refund.
+                    await db.commit()
+                log_event(logger, logging.INFO, "refund.skipped", reason="already_refunded", **context)
                 return None
 
             product = await get_product_for_order(db, order)
             if not product:
+                log_event(logger, logging.ERROR, "refund.failed", reason="product_not_found", **context)
                 raise RuntimeError(f"Refund product not found for order {order.order_no}")
 
             diamonds_revoked = await _revoke_order_assets(db, order, product)
@@ -113,7 +135,8 @@ async def _process_voided_token(purchase_token: str, package_name: str | None = 
             order.order_status = ORDER_STATUS_REFUNDED
             order.updated_time = int(time.time())
             db.add(order)
-            message = f"Your Google Play order {order.order_no} was refunded."
+            display_order_no = order.google_order_id or order.order_no
+            message = f"Your Google Play order {display_order_no} was refunded."
             if diamonds_revoked:
                 unit = "diamond was" if diamonds_revoked == 1 else "diamonds were"
                 message += f" {diamonds_revoked} {unit} deducted from your balance."
@@ -123,16 +146,18 @@ async def _process_voided_token(purchase_token: str, package_name: str | None = 
                 "diamonds_revoked": diamonds_revoked,
             }
             await db.commit()
-            logger.info("refund processed: order_no=%s diamonds_revoked=%s", detail["order_no"], diamonds_revoked)
+            log_event(logger, logging.INFO, "refund.processed", diamonds_revoked=diamonds_revoked, **context)
             return detail
         except Exception:
             await db.rollback()
             raise
 
 
-async def handle_voided_purchase_token(purchase_token: str, package_name: str | None = None) -> Optional[dict]:
+async def handle_voided_purchase_token(
+    purchase_token: str, package_name: str | None = None, google_order_id: str | None = None,
+) -> Optional[dict]:
     """Public entry: revoke assets for a voided (refunded) purchase token. Idempotent."""
-    return await _process_voided_token(purchase_token, package_name)
+    return await _process_voided_token(purchase_token, package_name, google_order_id)
 
 
 async def handle_canceled_one_time_purchase(purchase_token: str, package_name: str, sku: str) -> Optional[dict]:
@@ -147,14 +172,15 @@ async def handle_canceled_one_time_purchase(purchase_token: str, package_name: s
         order_no = result.scalar_one_or_none()
     if order_no is None:
         # Pending purchases never delivered anything; duplicate events also land here.
-        logger.info("refund: cancellation did not match a paid order, package=%s sku=%s", package_name, sku)
+        log_event(logger, logging.INFO, "refund.skipped", reason="no_paid_order", package_name=package_name, sku=sku)
         return None
 
     purchase = await google_play.verify_purchase(package_name, sku, purchase_token)
     if purchase.get("purchaseState") != google_play.PURCHASE_STATE_CANCELED:
-        logger.info("refund: cancellation not confirmed by Google, order_no=%s", order_no)
+        log_event(logger, logging.INFO, "refund.skipped", reason="cancellation_not_confirmed",
+                  order_no=order_no, purchase_state=purchase.get("purchaseState"))
         return None
-    return await _process_voided_token(purchase_token, package_name)
+    return await _process_voided_token(purchase_token, package_name, google_play.get_purchase_order_id(purchase))
 
 
 async def reconcile_refunded_order(order_no: str) -> Optional[dict]:
@@ -186,7 +212,7 @@ async def process_refunds_once() -> dict:
         try:
             packages = await _collect_package_names(db)
         except Exception:
-            logger.exception("refund: failed to collect package names")
+            log_event(logger, logging.ERROR, "refund.reconcile.failed", reason="collect_packages", exc_info=True)
             summary["errors"] += 1
             return summary
 
@@ -197,7 +223,8 @@ async def process_refunds_once() -> dict:
             try:
                 resp = await google_play.list_voided_purchases(package_name, page_token=page_token)
             except GooglePlayError as e:
-                logger.error("refund: failed to list voided purchases for %s: %s", package_name, e)
+                log_event(logger, logging.ERROR, "refund.reconcile.failed", reason="list_voided_purchases",
+                          package_name=package_name, google_status=e.status_code)
                 summary["errors"] += 1
                 break
 
@@ -208,9 +235,12 @@ async def process_refunds_once() -> dict:
                 if not purchase_token or "voidedQuantity" in item:
                     continue
                 try:
-                    detail = await _process_voided_token(purchase_token, package_name)
+                    detail = await _process_voided_token(
+                        purchase_token, package_name, google_play.get_purchase_order_id(item),
+                    )
                 except Exception:
-                    logger.exception("refund: failed to process voided purchase for %s", package_name)
+                    log_event(logger, logging.ERROR, "refund.reconcile.failed", reason="process_purchase",
+                              package_name=package_name, google_order_id=google_play.get_purchase_order_id(item), exc_info=True)
                     summary["errors"] += 1
                     continue
                 if detail:
@@ -221,6 +251,8 @@ async def process_refunds_once() -> dict:
             if not page_token:
                 break
 
+    log_event(logger, logging.INFO, "refund.reconcile.finished", voided_checked=summary["voided_checked"],
+              refunded=summary["refunded"], error_count=summary["errors"])
     return summary
 
 

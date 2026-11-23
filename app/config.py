@@ -19,11 +19,6 @@ def get_env(key: str) -> str:
 ENV_MODE = get_env("ENV_MODE")
 IS_DEBUG = ENV_MODE == "develop"
 
-if IS_DEBUG:
-    print("本地开发环境")
-else:
-    print("线上生产环境")
-
 # ===================== 自动读取 Railway 环境变量 =====================
 HOST: str = os.getenv('APP_HOST', '0.0.0.0')
 PORT: int = int(os.getenv('APP_PORT', '8000'))

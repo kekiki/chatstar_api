@@ -1,7 +1,9 @@
 from openai import APIStatusError, AsyncOpenAI
 from app.config import IS_DEBUG, OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
+from app.logging_config import log_event
 import logging
 import random
+from time import perf_counter
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,7 @@ class OpenAIClient:
         messages.extend(history_messages)
         messages.append({"role": "user", "content": content})
 
+        start = perf_counter()
         try:
             completion = await self.client.chat.completions.create(
                 model=OPENAI_MODEL,
@@ -104,14 +107,13 @@ class OpenAIClient:
 
             return reply_text
         except APIStatusError as e:
-            if e.status_code == 429:
-                logger.warning("OpenAI-compatible API rate limit reached, retry later")
-            else:
-                logger.warning(f"OpenAI-compatible API error: {str(e)}")
-
+            log_event(logger, logging.WARNING, "ai.chat.failed", provider_status=e.status_code,
+                      reason="rate_limited" if e.status_code == 429 else "provider_error",
+                      duration_ms=round((perf_counter() - start) * 1000, 2))
             return None
-        except Exception as e:
-            logger.warning(f"Server error: {str(e)}")
+        except Exception:
+            log_event(logger, logging.WARNING, "ai.chat.failed", exc_info=True,
+                      duration_ms=round((perf_counter() - start) * 1000, 2))
             return None
 
 ai_client = OpenAIClient()

@@ -3,6 +3,7 @@ Authentication routes: register and login.
 """
 
 import asyncio
+import logging
 import random
 from typing import Optional
 
@@ -12,11 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from faker import Faker
 
 from app.database import get_db
+from app.logging_config import log_event
 from app.ip_location import IPLocationResult, ip_location
 from app.models import AppList, AppReview, BlackWhiteDevice, BlackWhiteIp, BlackWhiteUser, User, UserFollow, UserLike
 from app.schemas import GoogleUserInfo, UserAgent, PasswordLoginRequest
 from app.security import create_token, verify_password
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["auth"])
 fake = Faker()
 
@@ -267,10 +270,12 @@ async def login_google(request: Request, data: GoogleUserInfo, db: AsyncSession 
     if user:
         user_dict = await _query_user(request, db, package_name, user)
         token = create_token({"sub": str(user.user_id)})
+        log_event(logger, logging.INFO, "auth.login", login_method="google", user_id=user.user_id)
         return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
     user_dict = await _create_user(request, db, package_name, data)
     token = create_token({"sub": str(user_dict["user_id"])})
+    log_event(logger, logging.INFO, "auth.register", login_method="google", user_id=user_dict["user_id"])
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
 
@@ -293,10 +298,12 @@ async def login_guest(request: Request, db: AsyncSession = Depends(get_db)):
     if user:
         user_dict = await _query_user(request, db, package_name, user)
         token = create_token({"sub": str(user.user_id)})
+        log_event(logger, logging.INFO, "auth.login", login_method="guest", user_id=user.user_id)
         return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
     user_dict = await _create_user(request, db, package_name, None)
     token = create_token({"sub": str(user_dict["user_id"])})
+    log_event(logger, logging.INFO, "auth.register", login_method="guest", user_id=user_dict["user_id"])
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
 
@@ -324,4 +331,5 @@ async def login_password(request: Request, data: PasswordLoginRequest, db: Async
 
     user_dict = await _query_user(request, db, package_name, user)
     token = create_token({"sub": str(user.user_id)})
+    log_event(logger, logging.INFO, "auth.login", login_method="password", user_id=user.user_id)
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}

@@ -12,9 +12,10 @@ from typing import Optional
 
 import httpx
 
+from app.logging_config import log_event
 from app.tools import get_http_client
 
-logger = logging.getLogger("google_play")
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://androidpublisher.googleapis.com/androidpublisher/v3"
 
@@ -42,7 +43,7 @@ def _refresh_service_account_token(sa_file: str) -> tuple[Optional[str], float]:
         from google.oauth2 import service_account
         from google.auth.transport.requests import Request as GoogleRequest
     except Exception:
-        logger.exception("google-auth library missing")
+        log_event(logger, logging.ERROR, "google.auth.failed", reason="dependency_missing", exc_info=True)
         raise GooglePlayError(
             "google-auth not installed; add `google-auth` to requirements to use service account verification"
         )
@@ -53,8 +54,8 @@ def _refresh_service_account_token(sa_file: str) -> tuple[Optional[str], float]:
         creds.refresh(GoogleRequest())
         expiry_ts = creds.expiry.timestamp() if getattr(creds, "expiry", None) else time.time() + 3600
         return creds.token, expiry_ts
-    except Exception as e:
-        logger.exception("failed to obtain service account token: %s", e)
+    except Exception:
+        log_event(logger, logging.ERROR, "google.auth.failed", reason="token_refresh", exc_info=True)
         raise GooglePlayError("failed to obtain service account token")
 
 
@@ -83,11 +84,11 @@ async def get_google_access_token() -> Optional[str]:
         return os.environ.get("GOOGLE_ACCESS_TOKEN") or None
 
 
-async def _google_api_get(url: str, params: Optional[dict] = None) -> dict:
+async def _google_api_get(url: str, *, operation: str, params: Optional[dict] = None) -> dict:
     """Authenticated GET against the Play Developer API, returns parsed JSON."""
     access_token = await get_google_access_token()
     if not access_token:
-        logger.error("Google verification not configured: no token available")
+        log_event(logger, logging.ERROR, "google.auth.failed", reason="not_configured", operation=operation)
         raise GooglePlayError("Google verification not configured (missing token or service account file)")
 
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -95,7 +96,7 @@ async def _google_api_get(url: str, params: Optional[dict] = None) -> dict:
         client = await get_http_client()
         resp = await client.get(url, headers=headers, params=params)
     except httpx.HTTPError as e:
-        logger.error("HTTP request to Google failed: %s", type(e).__name__)
+        log_event(logger, logging.ERROR, "google.api.failed", operation=operation, error_type=type(e).__name__)
         raise GooglePlayError("HTTP request to Google failed")
 
     if resp.status_code == 401:
@@ -107,25 +108,33 @@ async def _google_api_get(url: str, params: Optional[dict] = None) -> dict:
 
     if resp.status_code != 200:
         # Purchase tokens appear in verification URLs and can be echoed in errors.
-        logger.error("Google API failed with status=%s", resp.status_code)
+        log_event(logger, logging.ERROR, "google.api.failed", operation=operation, google_status=resp.status_code)
         raise GooglePlayError(f"Google API request failed: {resp.status_code}", status_code=resp.status_code)
 
     try:
         return resp.json()
     except Exception:
-        logger.exception("failed to parse Google response JSON")
+        log_event(logger, logging.ERROR, "google.api.failed", operation=operation, reason="invalid_json", exc_info=True)
         raise GooglePlayError("failed to parse Google response")
+
+
+def get_purchase_order_id(payload: dict) -> Optional[str]:
+    """Read the Google order ID when present in a Google API response or notification."""
+    order_id = payload.get("orderId")
+    if not isinstance(order_id, str):
+        return None
+    return order_id.strip() or None
 
 
 async def verify_purchase(package_name: str, product_id: str, purchase_token: str) -> dict:
     """Verify an in-app product purchase. Returns the raw Google response."""
     url = f"{BASE_URL}/applications/{package_name}/purchases/products/{product_id}/tokens/{purchase_token}"
-    return await _google_api_get(url)
+    return await _google_api_get(url, operation="verify_purchase")
 
 
 async def get_order(package_name: str, google_order_id: str) -> dict:
     """Read the payment state of a specific Google Play order."""
-    return await _google_api_get(f"{BASE_URL}/applications/{package_name}/orders/{google_order_id}")
+    return await _google_api_get(f"{BASE_URL}/applications/{package_name}/orders/{google_order_id}", operation="get_order")
 
 
 async def list_voided_purchases(
@@ -142,4 +151,4 @@ async def list_voided_purchases(
     if page_token:
         params["token"] = page_token
     url = f"{BASE_URL}/applications/{package_name}/purchases/voidedpurchases"
-    return await _google_api_get(url, params=params)
+    return await _google_api_get(url, operation="list_voided_purchases", params=params)

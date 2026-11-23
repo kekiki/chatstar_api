@@ -5,9 +5,10 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.logging_config import log_event
 from app.models.product import Product
 
-logger = logging.getLogger("product_selection")
+logger = logging.getLogger(__name__)
 
 
 async def get_product_for_order(db: AsyncSession, order) -> Product | None:
@@ -33,13 +34,6 @@ async def get_product_for_order(db: AsyncSession, order) -> Product | None:
         return None
 
     if len(products) > 1:
-        logger.warning(
-            "multiple product rows matched order; using newest row "
-            "order_no=%s sku=%s package_name=%s type=%s ids=%s",
-            order.order_no,
-            order.sku,
-            order.package_name,
-            order.type,
-            [product.id for product in products],
-        )
+        log_event(logger, logging.WARNING, "product.duplicate_match", order_no=order.order_no,
+                  sku=order.sku, package_name=order.package_name, product_id=products[0].id)
     return products[0]

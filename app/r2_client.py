@@ -1,12 +1,16 @@
 
+import logging
 import uuid
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.config import R2_ACCESS_KEY, R2_SECRET_KEY, R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_ENDPOINT, R2_PUBLIC_DOMAIN
+from app.logging_config import log_event
 from app.tools import get_http_client
 from fastapi import HTTPException
 import mimetypes
+
+logger = logging.getLogger(__name__)
 
 class R2Client:
     def __init__(self):
@@ -52,6 +56,7 @@ class R2Client:
                 "public_url": public_url
             }
         except Exception as e:
+            log_event(logger, logging.ERROR, "storage.r2.failed", operation="presign_upload", exc_info=True)
             raise HTTPException(status_code=500, detail=f"生成预签名失败:{str(e)}")
 
     async def put_file_to_r2(self, upload_url, file_bytes, content_type):
@@ -61,6 +66,8 @@ class R2Client:
             content=file_bytes,
             headers={"Content-Type": content_type}
         )
+        if not resp.is_success:
+            log_event(logger, logging.WARNING, "storage.r2.failed", operation="presigned_upload", provider_status=resp.status_code)
         return resp
 
     async def upload_bytes(self, file_bytes: bytes, object_key: str):
@@ -73,6 +80,7 @@ class R2Client:
             file_url = f"{R2_PUBLIC_DOMAIN}/{object_key}"
             return file_url
         except Exception as e:
+            log_event(logger, logging.ERROR, "storage.r2.failed", operation="upload_bytes", exc_info=True)
             raise HTTPException(500, f"R2上传失败: {str(e)}")
 
     def delete_file(self, object_key: str):

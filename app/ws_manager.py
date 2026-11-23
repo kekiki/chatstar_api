@@ -8,6 +8,8 @@ from typing import Any, Dict, Set
 
 from fastapi import WebSocket
 
+from app.logging_config import log_event
+
 logger = logging.getLogger(__name__)
 
 WS_EVENT_SEND_CHAT_MESSAGE = 'ws_event_send_chat_message' #发送聊天消息
@@ -52,7 +54,7 @@ class WSManager:
                 await ws.send_text(payload)
                 delivered += 1
             except Exception as e:
-                logger.warning("ws send failed user_id=%s err=%s", user_id, e)
+                log_event(logger, logging.WARNING, "websocket.send_failed", user_id=user_id, error_type=type(e).__name__)
                 stale.append(ws)
         if stale:
             async with self._lock:

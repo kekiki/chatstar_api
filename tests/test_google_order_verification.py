@@ -81,16 +81,25 @@ class GoogleOrderVerificationTests(unittest.TestCase):
     def test_matching_profile_id_fulfills_order_without_client_sku(self):
         self.set_google_purchase(obfuscatedExternalProfileId=self.order.transaction_no)
 
-        response = self.verify_order()
+        response = self.verify_order(orderId="GPA.client-supplied")
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["data"]["verified"])
         self.assertEqual(self.user.balance, 110)
         self.assertEqual(self.order.order_status, self.orders.ORDER_STATUS_PAID)
         self.assertEqual(self.order.purchase_token, "test-token")
+        self.assertEqual(self.order.google_order_id, "GPA.test")
         self.assertEqual(self.order.google_granted_diamonds, 100)
         self.lookup_product.assert_awaited_once_with(self.db, self.order)
         self.verify.assert_awaited_once_with(self.order.package_name, self.order.sku, "test-token")
+
+    def test_missing_google_order_id_never_falls_back_to_client_data(self):
+        self.set_google_purchase(obfuscatedExternalProfileId=self.order.transaction_no, orderId=None)
+
+        response = self.verify_order(orderId="GPA.client-supplied")
+
+        self.assertTrue(response.json()["data"]["verified"])
+        self.assertIsNone(self.order.google_order_id)
 
     def test_bonus_only_product_writes_diamond_transaction(self):
         self.product.diamonds = 0
@@ -155,13 +164,86 @@ class GoogleOrderVerificationTests(unittest.TestCase):
         )
         refund_message.assert_awaited_once_with(
             refund_db, self.user.user_id,
-            "Your Google Play order order-1 was refunded. 125 diamonds were deducted from your balance.",
+            "Your Google Play order GPA.test was refunded. 125 diamonds were deducted from your balance.",
         )
 
         self.db.execute.side_effect = [self.order_result]
         self.assertEqual(self.verify_order().status_code, 409)
         self.assertEqual(self.user.balance, 10)
         self.add_transaction.assert_awaited_once()
+
+    def test_refund_backfills_legacy_google_order_id_and_falls_back_when_unavailable(self):
+        from app import google_refund
+
+        self.order.purchase_token = "test-token"
+        for incoming, expected in (("GPA.from-refund", "GPA.from-refund"), (None, "order-1")):
+            with self.subTest(incoming=incoming):
+                self.order.order_status = self.orders.ORDER_STATUS_PAID
+                self.order.google_order_id = ""  # Older orders can have an empty string.
+                self.db.execute.side_effect = None
+                self.db.execute.return_value = self.order_result
+                self.db.commit.reset_mock()
+                session = MagicMock()
+                session.__aenter__.return_value = self.db
+                with (
+                    patch.object(google_refund, "AsyncSessionLocal", return_value=session),
+                    patch.object(google_refund, "get_product_for_order", return_value=self.product),
+                    patch.object(google_refund, "_revoke_order_assets", return_value=0),
+                    patch.object(google_refund, "send_system_chat_message") as message,
+                ):
+                    asyncio.run(google_refund.handle_voided_purchase_token(
+                        "test-token", self.order.package_name, incoming,
+                    ))
+                self.assertEqual(self.order.google_order_id, incoming or "")
+                self.assertEqual(self.order.order_no, "order-1")
+                self.db.commit.assert_awaited_once()
+                message.assert_awaited_once_with(
+                    self.db, self.user.user_id, f"Your Google Play order {expected} was refunded.",
+                )
+
+    def test_late_google_id_is_saved_without_resending_refund_message(self):
+        from app import google_refund
+
+        self.order.order_status = google_refund.ORDER_STATUS_REFUNDED
+        self.db.execute.side_effect = None
+        self.db.execute.return_value = self.order_result
+        session = MagicMock()
+        session.__aenter__.return_value = self.db
+        with (
+            patch.object(google_refund, "AsyncSessionLocal", return_value=session),
+            patch.object(google_refund, "_revoke_order_assets") as revoke,
+            patch.object(google_refund, "send_system_chat_message") as message,
+        ):
+            args = ("test-token", self.order.package_name, "GPA.from-refund")
+            self.assertIsNone(asyncio.run(google_refund.handle_voided_purchase_token(*args)))
+            self.assertIsNone(asyncio.run(google_refund.handle_voided_purchase_token(*args)))
+
+        self.assertEqual(self.order.google_order_id, "GPA.from-refund")
+        self.db.commit.assert_awaited_once()
+        revoke.assert_not_awaited()
+        message.assert_not_awaited()
+
+    def test_mismatched_refund_order_id_does_not_overwrite_or_revoke(self):
+        from app import google_refund
+
+        self.order.order_status = self.orders.ORDER_STATUS_PAID
+        self.order.google_order_id = "GPA.test"
+        self.db.execute.side_effect = None
+        self.db.execute.return_value = self.order_result
+        session = MagicMock()
+        session.__aenter__.return_value = self.db
+        with (
+            patch.object(google_refund, "AsyncSessionLocal", return_value=session),
+            patch.object(google_refund, "_revoke_order_assets") as revoke,
+        ):
+            self.assertIsNone(asyncio.run(google_refund.handle_voided_purchase_token(
+                "test-token", self.order.package_name, "GPA.unrelated",
+            )))
+
+        self.assertEqual(self.order.google_order_id, "GPA.test")
+        self.assertEqual(self.order.order_status, self.orders.ORDER_STATUS_PAID)
+        self.db.commit.assert_not_awaited()
+        revoke.assert_not_awaited()
 
     def test_refund_respects_legacy_orders_zero_grants_and_available_balance(self):
         from app import google_refund
@@ -214,9 +296,11 @@ class GoogleOrderVerificationTests(unittest.TestCase):
             for wrapped in (True, False):
                 with self.subTest(wrapped=wrapped):
                     process.reset_mock()
-                    event = {"voidedPurchaseNotification": {"purchaseToken": "test-token", "refundType": 1}}
+                    event = {"voidedPurchaseNotification": {
+                        "purchaseToken": "test-token", "refundType": 1, "orderId": "GPA.from-rtdn",
+                    }}
                     self.assertEqual(self.send_rtdn(event, wrapped=wrapped).status_code, 200)
-                    process.assert_awaited_once_with("test-token", self.order.package_name)
+                    process.assert_awaited_once_with("test-token", self.order.package_name, "GPA.from-rtdn")
 
     def test_rtdn_does_not_revoke_partial_or_invalid_refunds(self):
         with patch.object(self.rtdn, "handle_voided_purchase_token") as process:
@@ -259,7 +343,7 @@ class GoogleOrderVerificationTests(unittest.TestCase):
 
             self.set_google_purchase(purchaseState=google_refund.google_play.PURCHASE_STATE_CANCELED)
             asyncio.run(google_refund.handle_canceled_one_time_purchase(*args))
-            process.assert_awaited_once_with("test-token", self.order.package_name)
+            process.assert_awaited_once_with("test-token", self.order.package_name, "GPA.test")
 
     def test_manual_scan_follows_google_pagination_and_ignores_partial_refunds(self):
         from app import google_refund
@@ -269,7 +353,7 @@ class GoogleOrderVerificationTests(unittest.TestCase):
         pages = [
             {"tokenPagination": {"nextPageToken": "next"},
              "voidedPurchases": [{"purchaseToken": "partial-token", "voidedQuantity": 1}]},
-            {"voidedPurchases": [{"purchaseToken": "full-token"}]},
+            {"voidedPurchases": [{"purchaseToken": "full-token", "orderId": "GPA.from-list"}]},
         ]
         with (
             patch.object(google_refund, "AsyncSessionLocal", return_value=session),
@@ -280,7 +364,7 @@ class GoogleOrderVerificationTests(unittest.TestCase):
             result = asyncio.run(google_refund.process_refunds_once())
         self.assertEqual(result["voided_checked"], 2)
         self.assertEqual(result["refunded"], 1)
-        process.assert_awaited_once_with("full-token", self.order.package_name)
+        process.assert_awaited_once_with("full-token", self.order.package_name, "GPA.from-list")
         self.assertEqual(query.await_args.kwargs, {"page_token": "next"})
 
     def test_manual_revoke_requires_an_exact_fully_refunded_google_order(self):
@@ -368,6 +452,14 @@ class GoogleOrderVerificationTests(unittest.TestCase):
         self.assertEqual(self.user.balance, 10)
         self.verify.assert_not_awaited()
         self.add_transaction.assert_not_awaited()
+
+    def test_order_history_displays_google_order_id_when_available(self):
+        self.order.pp_type = ""
+        self.assertEqual(self.order.to_dict()["order_no"], "order-1")
+        self.order.order_status = self.orders.ORDER_STATUS_PAID
+        self.order.google_order_id = "GPA.test"
+        self.assertEqual(self.order.to_dict()["order_no"], "GPA.test")
+        self.assertEqual(self.order.order_no, "order-1")
 
     def test_order_history_preserves_refunded_status_for_old_orders(self):
         from app.models.order import ORDER_STATUS_FAILED, ORDER_STATUS_PENDING, ORDER_STATUS_REFUNDED

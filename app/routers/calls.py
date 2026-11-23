@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional
 
+from app.logging_config import log_event
 from app.schemas import CreateCallRequest, RenewCallRequest, HangupCallRequest
 from app.models import User, Call, Media
 from app.models.transaction import ASSET_DIAMOND, ASSET_MATCH_CARD, ASSET_CALL_CARD, TRANSACTION_MATCH, TRANSACTION_CALL, TRANSACTION_LIVE, TRANSACTION_REFUND
@@ -12,9 +13,11 @@ from app.tools import add_transaction, send_user_be_followed_or_liked_notificati
 from app.routers.tasks import add_task_progress
 from app.models.task import TYPE_MATCH_TIMES, TYPE_ACTIVE_CALL
 
+import logging
 import random
 import datetime
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["calls"])
 
 CREATE_MATCH_PRICE = 400
@@ -51,6 +54,8 @@ async def createCall(
             user.balance = (user.balance or 0) - CREATE_MATCH_PRICE
             await add_transaction(user, -CREATE_MATCH_PRICE, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_MATCH, db=db)
         else:
+            log_event(logger, logging.INFO, "call.rejected", operation="create",
+                      user_id=user.user_id, reason="insufficient_balance", call_type=data.call_type)
             return {"code": 2001, "msg": "Insufficient balance"}
 
         media = random.choice(medias)
@@ -70,6 +75,7 @@ async def createCall(
         db.add(call)
         await send_user_be_followed_or_liked_notification(user, anchor, db)
         await db.flush()
+        log_event(logger, logging.INFO, "call.created", user_id=user.user_id, call_id=call.id, call_type=call.call_type)
 
         return {
             "code": 200,
@@ -118,6 +124,7 @@ async def createCall(
         db.add(call)
         await send_user_be_followed_or_liked_notification(user, anchor, db)
         await db.flush()
+        log_event(logger, logging.INFO, "call.created", user_id=user.user_id, call_id=call.id, call_type=call.call_type)
 
         return {
             "code": 200,
@@ -147,6 +154,8 @@ async def createCall(
             user.balance = (user.balance or 0) - anchor.call_price
             await add_transaction(user, -anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_CALL, db=db)
         else:
+            log_event(logger, logging.INFO, "call.rejected", operation="create",
+                      user_id=user.user_id, reason="insufficient_balance", call_type=data.call_type)
             return {"code": 2001, "msg": "Insufficient balance"}
 
         media = random.choice(medias)
@@ -160,6 +169,7 @@ async def createCall(
         db.add(call)
         await send_user_be_followed_or_liked_notification(user, anchor, db)
         await db.flush()
+        log_event(logger, logging.INFO, "call.created", user_id=user.user_id, call_id=call.id, call_type=call.call_type)
 
         return {
             "code": 200,
@@ -194,6 +204,8 @@ async def renewCall(
                 call.updated_time = datetime.datetime.now()
                 call.is_paid = True
             else:
+                log_event(logger, logging.INFO, "call.rejected", operation="renew",
+                          user_id=user.user_id, reason="insufficient_balance", call_id=call.id, call_type=call.call_type)
                 return {"code": 2001, "msg": "Insufficient balance"}
     else:
         if call.is_ended:
@@ -206,6 +218,8 @@ async def renewCall(
             call.updated_time = datetime.datetime.now()
             call.is_paid = True
         else:
+            log_event(logger, logging.INFO, "call.rejected", operation="renew",
+                      user_id=user.user_id, reason="insufficient_balance", call_id=call.id, call_type=call.call_type)
             return {"code": 2001, "msg": "Insufficient balance"}
 
     return {
@@ -227,6 +241,7 @@ async def startCall(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     call.created_time = datetime.datetime.now()
+    log_event(logger, logging.DEBUG, "call.started", user_id=user.user_id, call_id=call.id)
     return {
         "code": 200,
         "data": {},
@@ -261,7 +276,9 @@ async def endCall(
             raise HTTPException(status_code=404, detail="Anchor not found")
 
         await add_transaction(user, anchor.call_price, asset_type=ASSET_DIAMOND, transaction_type=TRANSACTION_REFUND, db=db)
-        
+
+    log_event(logger, logging.INFO, "call.ended", user_id=user.user_id, call_id=call.id,
+              call_type=call.call_type, duration_ms=round(duration * 1000, 2))
     return {
         "code": 200,
         "data": {},

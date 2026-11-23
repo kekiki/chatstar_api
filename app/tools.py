@@ -1,12 +1,16 @@
+import logging
+
 import httpx
 import uuid
 import random
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from app.logging_config import log_event
 from app.models import User, ChatMessage, UserFollow, UserLike
 from app.ws_manager import ws_manager, WS_EVENT_USER_ASSETS_CHANGED, WS_EVENT_SEND_CHAT_MESSAGE, WS_EVENT_NEW_USER_REWARD, WS_EVENT_USER_BE_FOLLOWED, WS_EVENT_USER_BE_LIKED
 
+logger = logging.getLogger(__name__)
 _http_client: httpx.AsyncClient | None = None
 
 
@@ -22,6 +26,8 @@ async def add_transaction(user: User, amount: int, asset_type: int, transaction_
 
     transaction = Transaction(user_id=user.user_id, amount=amount, asset_type=asset_type, transaction_type=transaction_type)
     db.add(transaction)
+    log_event(logger, logging.DEBUG, "asset.transaction_added", user_id=user.user_id, amount=amount,
+              asset_type=asset_type, transaction_type=transaction_type)
     await send_userinfo_assets_notification(user)
 
 async def send_userinfo_assets_notification(user: User):

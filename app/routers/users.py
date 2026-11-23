@@ -6,17 +6,20 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, asc, func, select, delete
 
+import logging
 import random
 import datetime
 from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
+from app.logging_config import log_event
 from app.models import Media, User, UserFollow, UserLike, GiftRecord, Gift, ChatMessage, Call, TaskRecord, UserReport
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
 from app.translator import Translator
 from app.r2_client import get_r2_client
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["users"])
 
 @router.get("/user/info")
@@ -84,6 +87,7 @@ async def delete_account(user: User = Depends(current_user), db: AsyncSession = 
     """Delete the current user's account."""
     await _delete_user_related_records(db, user.user_id)
     await db.delete(user)
+    log_event(logger, logging.INFO, "user.account_delete_requested", user_id=user.user_id, login_method="session")
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/deleteAccountWithAccountPassword")
@@ -99,6 +103,7 @@ async def delete_account_with_account_password(data: DeleteAccountWithAccountPas
     
     await _delete_user_related_records(db, user.user_id)
     await db.delete(user)
+    log_event(logger, logging.INFO, "user.account_delete_requested", user_id=user.user_id, login_method="password")
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/updateFirebaseToken")

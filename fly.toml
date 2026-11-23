@@ -6,6 +6,8 @@ dockerfile = "Dockerfile"
 
 [env]
 PORT = "8080"
+LOG_FORMAT = "json"
+LOG_LEVEL = "INFO"
 GOOGLE_SERVICE_ACCOUNT_FILE = "/app/secrets/google-play-service-account.json"
 
 [http_service]

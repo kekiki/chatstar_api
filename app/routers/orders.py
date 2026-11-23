@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import google_play
 from app.google_play import GooglePlayError
+from app.logging_config import log_event
 from app.database import get_db, get_db_readonly
 from app.models import Order, User, Product
 from app.models.order import ORDER_STATUS_PAID, ORDER_STATUS_FAILED, ORDER_STATUS_REFUNDED
@@ -23,7 +24,7 @@ from app.tools import add_transaction
 from app.models.task import TYPE_RECHARGE_TIMES, TYPE_UNLOCK_VIP, TYPE_FIRST_RECHARGE
 from app.product_selection import get_product_for_order
 
-logger = logging.getLogger("orders")
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["orders"])
 
 
@@ -63,14 +64,13 @@ async def create_order(request: Request, data: CreateOrderRequest, user: User = 
         raise HTTPException(status_code=400, detail="Missing package_name header")
     
     now = datetime.now()
-    transaction_no = f"cs-{now.year}-{now.month}-{now.day}-{now.hour}-{now.minute}-{now.second}-{now.microsecond}"
-    order_no = f"O{now.strftime('%Y%m%d%H%M%S')}{now.microsecond}"
+    order_no = f"{now.strftime('%Y%m%d%H%M%S')}{now.microsecond}"
     agent = request.headers.get("user-agent")
 
     order = Order(
         package_name=package_name,
         user_id=user.user_id,
-        transaction_no=transaction_no,
+        transaction_no=order_no,
         order_no=order_no,
         sku=data.sku,
         type=data.type,
@@ -83,6 +83,8 @@ async def create_order(request: Request, data: CreateOrderRequest, user: User = 
     )
     db.add(order)
     await db.flush()
+    log_event(logger, logging.INFO, "order.created", order_no=order.order_no, user_id=user.user_id,
+              package_name=order.package_name, sku=order.sku)
     return {"code": 200, "data": order.to_dict()}
 
 @router.get("/user/orders")
@@ -127,6 +129,7 @@ async def verify_google_order(
     constraint so the same Google purchase can never be replayed on another order.
     """
     if not data.order_no and not data.transaction_no:
+        log_event(logger, logging.WARNING, "order.verify.rejected", user_id=user.user_id, reason="missing_order_reference")
         raise HTTPException(
             status_code=400,
             detail="Missing orderNo or transactionNo; the app must send the order reference",
@@ -142,30 +145,42 @@ async def verify_google_order(
     result_order = await db.execute(select(Order).where(*order_filters).with_for_update())
     order = result_order.scalar_one_or_none()
     if not order:
+        log_event(logger, logging.WARNING, "order.verify.rejected", user_id=user.user_id, reason="order_not_found")
         raise HTTPException(status_code=404, detail="Order not found")
+
+    context = {"order_no": order.order_no, "user_id": user.user_id, "sku": order.sku,
+               "package_name": order.package_name}
+
+    def rejected(reason: str) -> None:
+        log_event(logger, logging.WARNING, "order.verify.rejected", reason=reason,
+                  google_order_id=order.google_order_id, **context)
 
     header_package_name = request.headers.get("package-name")
     if header_package_name and data.package_name and header_package_name != data.package_name:
+        rejected("conflicting_package_names")
         raise HTTPException(status_code=400, detail="Package header does not match the request")
 
     product_id = data.product_id or order.sku
     package_name = data.package_name or header_package_name or order.package_name
 
     if data.product_id and order.sku != data.product_id:
-        logger.warning("sku mismatch rejected, order_no=%s order_sku=%s product_id=%s", order.order_no, order.sku, data.product_id)
+        rejected("sku_mismatch")
         raise HTTPException(status_code=400, detail="Product does not match the order")
 
     if package_name != order.package_name:
-        logger.warning("package mismatch rejected, order_no=%s order_package=%s package_name=%s", order.order_no, order.package_name, package_name)
+        rejected("package_mismatch")
         raise HTTPException(status_code=400, detail="Package does not match the order")
 
     if order.order_status == ORDER_STATUS_REFUNDED:
+        rejected("order_already_refunded")
         raise HTTPException(status_code=409, detail="Order has already been refunded")
 
     # 仅同一个已验证的 token 可走幂等返回，避免客户端误消耗其他购买。
     if order.order_status == ORDER_STATUS_PAID:
         if order.purchase_token != data.purchase_token:
+            rejected("purchase_token_mismatch")
             raise HTTPException(status_code=409, detail="Purchase token does not match the order")
+        log_event(logger, logging.INFO, "order.verify.already_verified", google_order_id=order.google_order_id, **context)
         return {"code": 200, "data": {"verified": True, "msg": "Order already verified"}}
 
     # 防重放：同一 Google 购买凭据只能绑定一个订单
@@ -173,19 +188,20 @@ async def verify_google_order(
         select(Order.id).where(Order.purchase_token == data.purchase_token, Order.id != order.id)
     )
     if result_replay.scalar_one_or_none() is not None:
-        logger.warning("purchase token replay rejected, order_no=%s user_id=%s", data.order_no, user.user_id)
+        rejected("purchase_token_reused")
         raise HTTPException(status_code=409, detail="Purchase token already used")
 
     # 商品按订单类型区分；同一 SKU 在数据库中可能有多种充值类型。
     product = await get_product_for_order(db, order)
     if not product:
+        rejected("product_not_found")
         raise HTTPException(status_code=404, detail="Product not found")
 
     # 调 Google Play Developer API 验证购买
     try:
         result = await google_play.verify_purchase(package_name, product_id, data.purchase_token)
     except GooglePlayError as e:
-        logger.error("google verify failed order_no=%s: %s", data.order_no, e)
+        log_event(logger, logging.ERROR, "order.verify.google_failed", google_status=e.status_code, **context)
         raise HTTPException(status_code=502, detail="Google purchase verification failed")
 
     purchase_state = result.get("purchaseState")
@@ -194,13 +210,13 @@ async def verify_google_order(
     if "obfuscatedExternalProfileId" in result:
         profile_id = result["obfuscatedExternalProfileId"]
         if not order.transaction_no or profile_id != order.transaction_no:
-            logger.warning("Google purchase profile ID mismatch, order_no=%s", order.order_no)
+            rejected("profile_id_mismatch")
             raise HTTPException(status_code=400, detail="Google purchase does not match the order")
     elif purchase_state == google_play.PURCHASE_STATE_PURCHASED:
         if not _is_legacy_google_purchase(order, result):
-            logger.warning("Google purchase profile ID missing, order_no=%s", order.order_no)
+            rejected("profile_id_missing")
             raise HTTPException(status_code=400, detail="Google purchase is missing the order reference")
-        logger.warning("Accepted legacy Google purchase without profile ID, order_no=%s", order.order_no)
+        log_event(logger, logging.WARNING, "order.verify.legacy_purchase", **context)
 
     now_ts = int(time.time())
 
@@ -209,7 +225,7 @@ async def verify_google_order(
         granted_diamonds = purchased_diamonds + max(0, product.reward_diamonds or 0)
         order.order_status = ORDER_STATUS_PAID
         order.purchase_token = data.purchase_token
-        order.google_order_id = result.get("orderId") or ""
+        order.google_order_id = google_play.get_purchase_order_id(result) or order.google_order_id
         order.google_granted_diamonds = granted_diamonds
         order.updated_time = now_ts
         db.add(order)
@@ -262,6 +278,10 @@ async def verify_google_order(
         db.add(order)
         verified = False
 
+    log_event(logger, logging.INFO, "order.verify.result", outcome="credited" if verified else "not_credited",
+              google_order_id=order.google_order_id or google_play.get_purchase_order_id(result),
+              purchase_state=purchase_state, order_status=order.order_status,
+              diamonds_granted=order.google_granted_diamonds if verified else None, **context)
     return {"code": 200, "data": {"verified": verified, "google": result}}
 
 
@@ -282,7 +302,7 @@ async def process_google_refunds(request: Request):
 
     try:
         summary = await process_refunds_once()
-    except Exception as e:
-        logger.exception("manual refund processing failed")
+    except Exception:
+        log_event(logger, logging.ERROR, "refund.reconcile.failed", exc_info=True)
         raise HTTPException(status_code=500, detail="Refund processing failed")
     return {"code": 200, "data": summary}

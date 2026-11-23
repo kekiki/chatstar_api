@@ -34,8 +34,8 @@ OPENAI_MODEL=gpt-4o-mini
 ### 退款通知与补单
 
 - Play Console 手动退款时，若希望自动回收道具或 VIP，使用同时撤销购买的选项。仅退款的订单可能不会出现在 Google 的作废购买列表里。
-- 在 Play Console 发送 RTDN 测试通知，并确认 Fly 日志有 `rtdn: test notification received`。后端直连测试不能替代 Pub/Sub 投递检查。
-- 成功回收时，后端保存一条系统消息；有钻石扣回时，消息显示实际扣除的数量。重复通知不会重复扣回或保存消息。
+- 在 Play Console 发送 RTDN 测试通知，并确认 Fly 日志有 `rtdn.test_received`。后端直连测试不能替代 Pub/Sub 投递检查。
+- Google 验单或退款数据提供的订单号保存在 `google_order_id`，后台订单号在数据库中不变。订单历史和退款系统消息优先显示 Google 订单号；没有时才显示后台订单号。消息中的钻石数量为实际扣除数量。重复通知不会重复扣回或保存消息。
 - 对于已退款、且确实需要撤销权益但未自动处理的单笔订单，可在具备数据库和 Google Play 凭据的后端环境运行：
 
   ```bash
@@ -43,6 +43,32 @@ OPENAI_MODEL=gpt-4o-mini
   ```
 
   脚本会向 Google 核对原订单和购买凭据，只处理确认全额退款、且本地仍是已支付的订单。不会再次向 Google 发起退款，也不会开启轮询。
+
+## 查看日志
+
+应用日志写入标准输出。本地默认是单行文本；Fly 使用单行 JSON。每条日志都有 UTC 日期时间、级别和事件名。HTTP 请求记录路由模板、状态码和耗时，成功的 `/health` 探针不记录。客户端可从响应头读取 `X-Request-ID`，再用它串起同一次请求的验证、业务和错误日志。
+
+- `LOG_FORMAT`：`console`（默认）或 `json`。
+- `LOG_LEVEL`：`DEBUG`、`INFO`（默认）、`WARNING`、`ERROR` 或 `CRITICAL`。`DEBUG` 会额外显示资产流水记录等细节。
+- 请求日志不包含原始查询参数、请求体、认证头或客户端 IP。支付、聊天和外部服务事件只记录排查需要的元数据；异常日志保留类型和栈帧，不打印原始异常内容。此设置不删除旧日志。
+
+在仓库根目录（已激活 `.venv`）运行：
+
+```bash
+# 只看最近的警告或错误，按北京时间显示
+fly logs -a chatstar-api --no-tail --json | python -m scripts.filter_logs --level WARNING --timezone Asia/Shanghai
+
+# 实时跟踪 Google 通知和退款
+fly logs -a chatstar-api --json | python -m scripts.filter_logs --event rtdn --event refund
+
+# 查一笔 Google 订单，也支持后台 O 开头的订单号
+fly logs -a chatstar-api --no-tail --json | python -m scripts.filter_logs --order GPA.1234-5678-9012-34567
+
+# 排查验单接口，也可改用 --request-id <响应头中的ID> 查同一次请求
+fly logs -a chatstar-api --no-tail --json | python -m scripts.filter_logs --route /api/order/verify
+```
+
+`--event` 匹配事件名或事件前缀。常用事件：`http.validation_failed`（请求校验失败）、`order.verify.result`（验单结果）、`rtdn.voided_received`（收到作废通知）、`refund.processed`（退款回收已提交）、`refund.skipped`（跳过及原因）。单个业务事件未必包含路由、订单号或请求 ID：这些筛选条件只匹配有该字段的日志，可以先按订单号找到请求 ID，再用请求 ID 查看完整链路。
 
 ## 在虚拟环境运行项目
 

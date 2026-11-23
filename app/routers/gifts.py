@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.logging_config import log_event
 from app.database import AsyncSessionLocal, get_db, get_db_readonly
 from app.models import Gift, GiftRecord, User
 from app.models.transaction import ASSET_DIAMOND, TRANSACTION_GIFT
@@ -67,6 +68,7 @@ async def send_gift(
 
     total_cost = gift.gift_price * data.num
     if (user.balance or 0) < total_cost:
+        log_event(logger, logging.INFO, "gift.rejected", user_id=user.user_id, reason="insufficient_balance")
         return {"code": 2001, "msg": "Insufficient balance"}
 
     user.balance = (user.balance or 0) - total_cost
@@ -85,6 +87,7 @@ async def send_gift(
     anchor_id = receiver.user_id
 
     await db.commit()
+    log_event(logger, logging.INFO, "gift.sent", user_id=gift_sender_id, amount=total_cost, gift_id=gift.id)
 
     background_tasks.add_task(background_chat_task, sender_id=anchor_id, receiver_id=gift_sender_id)
 
@@ -113,5 +116,5 @@ async def background_chat_task(sender_id: int, receiver_id: int):
             
             await send_chat_message(db=db, sender_id=sender_id, receiver_id=receiver_id, msg_type='text', content=reply_text)
             await db.commit()
-    except Exception as e:
-        logger.exception("sendGift background chat task failed: %s", e)
+    except Exception:
+        log_event(logger, logging.ERROR, "gift.ai_reply.failed", user_id=receiver_id, exc_info=True)

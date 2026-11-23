@@ -15,4 +15,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 启动命令，和你最开始那行Procfile参数完全对齐
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--loop", "uvloop", "--ws-ping-interval", "20", "--ws-ping-timeout", "60"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--no-access-log", "--loop", "uvloop", "--ws-ping-interval", "20", "--ws-ping-timeout", "60"]
