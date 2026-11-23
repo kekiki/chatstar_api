@@ -21,6 +21,16 @@ OPENAI_MODEL=gpt-4o-mini
 如需继续使用 Groq，可将根地址设为 `https://api.groq.com/openai/v1`，并填写对应的 Key 和模型 ID（如 `openai/gpt-oss-20b`）。
 `ENV_MODE=develop` 时仍使用本地随机模拟回复，不会调用 AI 服务，也不需要配置 API Key；验证真实接口时需使用非 `develop` 环境。
 
+## Google Play 内购订单绑定
+
+发货前，`/api/order/verify` 会将 Google Play 服务端返回的 `obfuscatedExternalProfileId`
+与后台订单的 `transaction_no` 核对；不一致则拒绝发货。当前 Flutter 支付流程会在发起支付时传入此值。
+
+默认也拒绝没有该字段的成功购买。如确需兼容未传该字段的历史购买，可设置
+`GOOGLE_PLAY_LEGACY_PROFILE_ID_CUTOFF` 为客户端开始传入该字段的 Unix 时间戳（秒）。
+只有后台订单创建时间和 Google 返回的购买时间都严格早于该时间点，才允许按旧流程补单。
+没有确认过切换时间时，保持该变量不设置。
+
 ## 在虚拟环境运行项目
 
 1.进入你的项目文件夹

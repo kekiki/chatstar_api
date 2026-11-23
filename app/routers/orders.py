@@ -3,6 +3,7 @@ Order routes: create order, query by orderNo, query by userId, verify Google pur
 """
 
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -24,6 +25,22 @@ from app.product_selection import get_product_for_order
 
 logger = logging.getLogger("orders")
 router = APIRouter(prefix="/api", tags=["orders"])
+
+
+def _is_legacy_google_purchase(order: Order, purchase: dict) -> bool:
+    """Only allow unbound purchases from before an explicit migration cutoff."""
+    try:
+        cutoff = int(os.getenv("GOOGLE_PLAY_LEGACY_PROFILE_ID_CUTOFF", ""))
+        purchase_time_ms = int(purchase.get("purchaseTimeMillis"))
+    except (TypeError, ValueError):
+        return False
+
+    return (
+        order.created_time is not None
+        and 0 < order.created_time < cutoff
+        and 0 < purchase_time_ms < cutoff * 1000
+    )
+
 
 @router.get("/order/products")
 async def get_products(request: Request, db: AsyncSession = Depends(get_db_readonly)):
@@ -142,8 +159,10 @@ async def verify_google_order(
         logger.warning("package mismatch rejected, order_no=%s order_package=%s package_name=%s", order.order_no, order.package_name, package_name)
         raise HTTPException(status_code=400, detail="Package does not match the order")
 
-    # 幂等保护：已验证成功的订单不重复发放奖励
+    # 仅同一个已验证的 token 可走幂等返回，避免客户端误消耗其他购买。
     if order.order_status == ORDER_STATUS_PAID:
+        if order.purchase_token != data.purchase_token:
+            raise HTTPException(status_code=409, detail="Purchase token does not match the order")
         return {"code": 200, "data": {"verified": True, "msg": "Order already verified"}}
 
     # 防重放：同一 Google 购买凭据只能绑定一个订单
@@ -167,6 +186,19 @@ async def verify_google_order(
         raise HTTPException(status_code=502, detail="Google purchase verification failed")
 
     purchase_state = result.get("purchaseState")
+
+    # 订单归属以 Google 的服务端响应为准，不信任客户端的购买数据。
+    if "obfuscatedExternalProfileId" in result:
+        profile_id = result["obfuscatedExternalProfileId"]
+        if not order.transaction_no or profile_id != order.transaction_no:
+            logger.warning("Google purchase profile ID mismatch, order_no=%s", order.order_no)
+            raise HTTPException(status_code=400, detail="Google purchase does not match the order")
+    elif purchase_state == google_play.PURCHASE_STATE_PURCHASED:
+        if not _is_legacy_google_purchase(order, result):
+            logger.warning("Google purchase profile ID missing, order_no=%s", order.order_no)
+            raise HTTPException(status_code=400, detail="Google purchase is missing the order reference")
+        logger.warning("Accepted legacy Google purchase without profile ID, order_no=%s", order.order_no)
+
     now_ts = int(time.time())
 
     if purchase_state == google_play.PURCHASE_STATE_PURCHASED:
@@ -231,8 +263,6 @@ async def process_google_refunds(request: Request):
     Requires the `x-cron-secret` header to match the `CRON_SECRET` env var
     (used by external cron / ops tooling). Disabled when CRON_SECRET is unset.
     """
-    import os
-
     cron_secret = os.environ.get("CRON_SECRET")
     if not cron_secret:
         raise HTTPException(status_code=503, detail="Refund processing endpoint is disabled")
