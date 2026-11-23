@@ -368,3 +368,15 @@ class GoogleOrderVerificationTests(unittest.TestCase):
         self.assertEqual(self.user.balance, 10)
         self.verify.assert_not_awaited()
         self.add_transaction.assert_not_awaited()
+
+    def test_order_history_preserves_refunded_status_for_old_orders(self):
+        from app.models.order import ORDER_STATUS_FAILED, ORDER_STATUS_PENDING, ORDER_STATUS_REFUNDED
+
+        self.order.pp_type = ""
+        self.order.order_status = ORDER_STATUS_REFUNDED
+        self.assertEqual(self.order.to_dict()["order_status"], ORDER_STATUS_REFUNDED)
+        self.assertEqual(self.order.order_status, ORDER_STATUS_REFUNDED)
+
+        self.order.order_status = ORDER_STATUS_PENDING
+        self.assertEqual(self.order.to_dict()["order_status"], ORDER_STATUS_FAILED)
+        self.assertEqual(self.order.order_status, ORDER_STATUS_PENDING)

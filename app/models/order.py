@@ -42,9 +42,9 @@ class Order(Base):
         return self.type == 2
 
     def to_dict(self):
-        is_failed = self.order_status != 1 and self.created_time < int((datetime.datetime.now() - datetime.timedelta(hours=1)).timestamp())
-        if is_failed:
-            self.order_status = 2
+        status = self.order_status
+        if status == ORDER_STATUS_PENDING and self.created_time < int((datetime.datetime.now() - datetime.timedelta(hours=1)).timestamp()):
+            status = ORDER_STATUS_FAILED
         return {
             "id": self.id,
             "order_no": self.order_no,
@@ -53,7 +53,7 @@ class Order(Base):
             "updated_time": self.updated_time,
             "sku": self.sku,
             "type": self.type,
-            "order_status": self.order_status,
+            "order_status": status,
             "currency_code": self.currency_code,
             "currency_price": self.currency_price,
             "pp_type": self.pp_type if len(self.pp_type) > 0 else 'Google',
