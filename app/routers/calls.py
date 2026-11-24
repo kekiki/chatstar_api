@@ -343,7 +343,7 @@ async def get_call_records(
             if is_live_status:
                 online_status = 2 
             else:
-                online_status = 1 if peer.is_review else 0
+                online_status = 1 if peer.is_review or len(live_list) == 0 else 0
 
         items.append({
             "call_id": call.id,

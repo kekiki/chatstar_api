@@ -212,7 +212,7 @@ async def get_users(
             if is_live_status:
                 anchor_dict["online_status"] = 2 
             else:
-                anchor_dict["online_status"] = 1 if anchor.is_review else 0
+                anchor_dict["online_status"] = 1 if anchor.is_review or len(live_list) == 0 else 0
 
         anchor_dict["is_followed"] = anchor.user_id in followed_ids
         anchor_dict["is_liked"] = anchor.user_id in liked_ids
@@ -318,7 +318,7 @@ async def get_user_detail(
         if is_live:
             anchor_dict["online_status"] = 2
         else:
-            anchor_dict["online_status"] = 1 if user.is_review else 0
+            anchor_dict["online_status"] = 1 if user.is_review or len(live_list) == 0 else 0
 
     return {"code": 200, "data": anchor_dict}
 
