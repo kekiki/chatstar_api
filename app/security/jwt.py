@@ -4,13 +4,14 @@ JWT and password authentication utilities.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import BackgroundTasks, Depends, Header, HTTPException
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.activity import schedule_user_activity
 from app.config import ALGORITHM, SECRET_KEY, TOKEN_EXPIRE_DAYS
 from app.database import get_db, get_db_readonly
 from app.models import User
@@ -62,14 +63,20 @@ async def _resolve_user(authorization: Optional[str], db: AsyncSession) -> User:
 
 
 async def current_user(
+    background_tasks: BackgroundTasks,
     authorization: str = Header(None, alias="Authorization"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
-    return await _resolve_user(authorization, db)
+    user = await _resolve_user(authorization, db)
+    schedule_user_activity(background_tasks, user.user_id, user.is_anchor)
+    return user
 
 
 async def current_user_readonly(
+    background_tasks: BackgroundTasks,
     authorization: str = Header(None, alias="Authorization"),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
 ) -> User:
-    return await _resolve_user(authorization, db)
+    user = await _resolve_user(authorization, db)
+    schedule_user_activity(background_tasks, user.user_id, user.is_anchor)
+    return user

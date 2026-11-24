@@ -50,7 +50,7 @@ async def get_upload_url(user: User = Depends(current_user_readonly), suffix: st
 async def set_user_attribution(
     attribution: GoogleAttribution,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Set user attribution."""
     user.install_referrer = attribution.install_referrer
@@ -64,7 +64,7 @@ async def set_user_attribution(
 
 
 @router.post("/user/setPassword")
-async def set_password(data: SetPasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def set_password(data: SetPasswordRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Set user password"""
     user.password = get_hash(data.password)
     return {"code": 200, "data": {"message": "Password set successfully"}}
@@ -84,7 +84,7 @@ async def _delete_user_related_records(db: AsyncSession, user_id: int):
 
 
 @router.post("/user/deleteAccount")
-async def delete_account(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def delete_account(user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Delete the current user's account."""
     await _delete_user_related_records(db, user.user_id)
     await db.delete(user)
@@ -92,7 +92,7 @@ async def delete_account(user: User = Depends(current_user), db: AsyncSession = 
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/deleteAccountWithAccountPassword")
-async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def delete_account_with_account_password(data: DeleteAccountWithAccountPasswordRequest, db: AsyncSession = Depends(get_db, scope="function")):
     """Delete account with user_id and password."""
     result = await db.execute(select(User).where(User.user_id == data.username))
     user = result.scalar_one_or_none()
@@ -108,7 +108,7 @@ async def delete_account_with_account_password(data: DeleteAccountWithAccountPas
     return {"code": 200, "data": {"message": "Account deleted successfully"}}
 
 @router.post("/user/updateFirebaseToken")
-async def update_firebase_token(data: UpdateFirebaseTokenRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def update_firebase_token(data: UpdateFirebaseTokenRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Update user firebase token"""
     user.firebase_token = data.firebase_token
     return {"code": 200, "data": {"message": "update successfully"}}
@@ -123,7 +123,7 @@ async def translate(data: GoogleTranslateRequest, user: User = Depends(current_u
 @router.get("/user/getUsers")
 async def get_users(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     sort_by: Literal["like_count", "created_time", "follow_count", "fans_count"] = Query(
         default="like_count", description="Sort field"
     ),
@@ -235,7 +235,7 @@ async def get_users(
 async def get_user_detail(
     user_id: int,
     current_user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly)
+    db: AsyncSession = Depends(get_db_readonly, scope="function")
 ):  
     result = await db.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
@@ -318,7 +318,7 @@ async def get_user_detail(
 
 
 @router.post("/user/getAibUser")
-async def get_aib_user(db: AsyncSession = Depends(get_db_readonly)):  
+async def get_aib_user(db: AsyncSession = Depends(get_db_readonly, scope="function")):
     media_result = await db.execute(select(Media).where(Media.video_type == 1, Media.is_video == True))
     medias = media_result.scalars().all()
     if len(medias) <= 0:

@@ -70,7 +70,7 @@ async def follow_user(
     data: Optional[TargetUserRequest] = None,
     target_user_id: Optional[int] = Query(default=None, description="User ID to follow"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
@@ -99,7 +99,7 @@ async def unfollow_user(
     data: Optional[TargetUserRequest] = None,
     target_user_id: Optional[int] = Query(default=None, description="User ID to unfollow"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     result = await db.execute(
@@ -127,7 +127,7 @@ async def block_user(
     data: Optional[TargetUserRequest] = None,
     target_user_id: Optional[int] = Query(default=None, description="User ID to block"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
@@ -153,7 +153,7 @@ async def unblock_user(
     data: Optional[TargetUserRequest] = None,
     target_user_id: Optional[int] = Query(default=None, description="User ID to unblock"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     result = await db.execute(
@@ -175,7 +175,7 @@ async def unblock_user(
 @router.get("/user/blocks")
 async def get_my_blocks(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
@@ -217,7 +217,7 @@ async def like_user(
     data: Optional[TargetUserRequest] = None,
     target_user_id: Optional[int] = Query(default=None, description="User ID to like"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     if user.user_id == target_user_id:
@@ -245,7 +245,7 @@ async def unlike_user(
     data: Optional[TargetUserRequest] = None,
     target_user_id: Optional[int] = Query(default=None, description="User ID to unlike"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     result = await db.execute(
@@ -272,7 +272,7 @@ async def report_user(
     target_user_id: Optional[int] = Query(default=None, description="User ID to report"),
     reason: str = Query(default="", max_length=255, description="Report reason"),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     target_user_id = _resolve_target_user_id(data, target_user_id)
     reason = data.reason if data is not None else reason
@@ -290,7 +290,7 @@ async def report_user(
 @router.get("/user/follows")
 async def get_my_follows(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
@@ -332,7 +332,7 @@ async def get_my_follows(
 @router.get("/user/fans")
 async def get_my_fans(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
@@ -385,7 +385,7 @@ async def get_my_fans(
 @router.get("/user/likers")
 async def get_my_likers(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):

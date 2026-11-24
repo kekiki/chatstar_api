@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["transactions"])
 @router.get("/user/transactions")
 async def get_transactions(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ):

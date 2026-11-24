@@ -15,7 +15,7 @@ from app.models.task import (
 )
 from app.models.transaction import ASSET_DIAMOND, ASSET_CALL_CARD, ASSET_MATCH_CARD, ASSET_CHAT_CARD, TRANSACTION_TASK
 from app.schemas import TaskReportRequest, TaskReceiveRequest
-from app.security import current_user
+from app.security import current_user, current_user_readonly
 from app.tools import add_transaction
 
 router = APIRouter(prefix="/api", tags=["tasks"])
@@ -103,7 +103,7 @@ async def add_task_progress(db: AsyncSession, user_id: int, event_type: str, num
 
 
 @router.get("/user/tasks")
-async def get_tasks(user: User = Depends(current_user), db: AsyncSession = Depends(get_db_readonly)):
+async def get_tasks(user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly, scope="function")):
     """Get all tasks with the current user's progress, grouped by category."""
     today = datetime.date.today()
 
@@ -168,7 +168,7 @@ async def get_tasks(user: User = Depends(current_user), db: AsyncSession = Depen
     }
 
 @router.post("/user/signin")
-async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Sign in for the current user. 7-day cycle, streak resets if a day is missed."""
     today = datetime.date.today()
 
@@ -212,7 +212,7 @@ async def signin(user: User = Depends(current_user), db: AsyncSession = Depends(
 
 
 @router.post("/user/task/report")
-async def report_task_progress(data: TaskReportRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def report_task_progress(data: TaskReportRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Report a task event (e.g. follow an anchor) to increase task progress."""
     if data.type == "signin":
         return {"code": 400, "msg": "签到任务请调用 /api/user/signin"}
@@ -221,7 +221,7 @@ async def report_task_progress(data: TaskReportRequest, user: User = Depends(cur
 
 
 @router.post("/user/task/receive")
-async def receive_task_reward(data: TaskReceiveRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def receive_task_reward(data: TaskReceiveRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Claim the reward of a completed daily/newcomer task."""
     task = await db.get(Task, data.task_id)
     if not task or task.status != 1:

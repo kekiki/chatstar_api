@@ -37,7 +37,7 @@ GIFT_REPLY_MESSAGES = [
 ]
 
 @router.get("/user/gifts")
-async def get_gifts(user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly)):
+async def get_gifts(user: User = Depends(current_user_readonly), db: AsyncSession = Depends(get_db_readonly, scope="function")):
     """Get all gifts sorted by price."""
     result = await db.execute(select(Gift).order_by(Gift.gift_price.asc()))
     gifts = result.scalars().all()
@@ -50,7 +50,7 @@ async def send_gift(
     data: SendGiftRequest,
     background_tasks: BackgroundTasks,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Send a gift to another user."""
     if data.user_id == user.user_id:

@@ -7,11 +7,12 @@ import logging
 import random
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from faker import Faker
 
+from app.activity import schedule_user_activity
 from app.database import get_db
 from app.logging_config import log_event
 from app.ip_location import IPLocationResult, ip_location
@@ -250,7 +251,7 @@ async def _query_user(request: Request, db: AsyncSession, package_name: str, use
 
 
 @router.post("/auth/loginGoogle")
-async def login_google(request: Request, data: GoogleUserInfo, db: AsyncSession = Depends(get_db)):
+async def login_google(request: Request, data: GoogleUserInfo, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db, scope="function")):
     """Login or register a user using Google account."""
     device_id = request.headers.get("device-id")
     if not device_id:
@@ -274,17 +275,19 @@ async def login_google(request: Request, data: GoogleUserInfo, db: AsyncSession 
     if user:
         user_dict = await _query_user(request, db, package_name, user)
         token = create_token({"sub": str(user.user_id)})
+        schedule_user_activity(background_tasks, user.user_id, user.is_anchor)
         log_event(logger, logging.INFO, "auth.login", login_method="google", user_id=user.user_id)
         return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
     user_dict = await _create_user(request, db, package_name, data)
     token = create_token({"sub": str(user_dict["user_id"])})
+    schedule_user_activity(background_tasks, user_dict["user_id"], user_dict["is_anchor"])
     log_event(logger, logging.INFO, "auth.register", login_method="google", user_id=user_dict["user_id"])
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
 
 @router.post("/auth/loginGuest")
-async def login_guest(request: Request, db: AsyncSession = Depends(get_db)):
+async def login_guest(request: Request, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db, scope="function")):
     """Login as a guest user with device_id from request header."""
     device_id = request.headers.get("device-id")
     if not device_id:
@@ -302,17 +305,19 @@ async def login_guest(request: Request, db: AsyncSession = Depends(get_db)):
     if user:
         user_dict = await _query_user(request, db, package_name, user)
         token = create_token({"sub": str(user.user_id)})
+        schedule_user_activity(background_tasks, user.user_id, user.is_anchor)
         log_event(logger, logging.INFO, "auth.login", login_method="guest", user_id=user.user_id)
         return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
     user_dict = await _create_user(request, db, package_name, None)
     token = create_token({"sub": str(user_dict["user_id"])})
+    schedule_user_activity(background_tasks, user_dict["user_id"], user_dict["is_anchor"])
     log_event(logger, logging.INFO, "auth.register", login_method="guest", user_id=user_dict["user_id"])
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}
 
 
 @router.post("/auth/loginPassword")
-async def login_password(request: Request, data: PasswordLoginRequest, db: AsyncSession = Depends(get_db)):
+async def login_password(request: Request, data: PasswordLoginRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db, scope="function")):
     """Login using user_id and password."""
     device_id = request.headers.get("device-id")
     if not device_id:
@@ -335,5 +340,6 @@ async def login_password(request: Request, data: PasswordLoginRequest, db: Async
 
     user_dict = await _query_user(request, db, package_name, user)
     token = create_token({"sub": str(user.user_id)})
+    schedule_user_activity(background_tasks, user.user_id, user.is_anchor)
     log_event(logger, logging.INFO, "auth.login", login_method="password", user_id=user.user_id)
     return {"code": 200, "data": {"accessToken": token, "user": user_dict}}

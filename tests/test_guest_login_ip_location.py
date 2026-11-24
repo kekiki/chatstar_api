@@ -2,7 +2,7 @@ import os
 import unittest
 from itertools import product
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -61,7 +61,7 @@ class GuestLoginIPLocationTests(unittest.TestCase):
                 app = FastAPI()
                 app.include_router(self.auth.router)
                 app.dependency_overrides[self.auth.get_db] = lambda: db
-                with TestClient(app) as client:
+                with patch("app.activity.record_user_activity", new_callable=AsyncMock), TestClient(app) as client:
                     response = client.post("/api/auth/loginGuest", headers={
                         "device-id": "guest-test-device",
                         "package-name": "com.example.app",

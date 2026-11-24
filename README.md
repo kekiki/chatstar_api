@@ -70,6 +70,10 @@ fly logs -a chatstar-api --no-tail --json | python -m scripts.filter_logs --rout
 
 `--event` 匹配事件名或事件前缀。常用事件：`http.validation_failed`（请求校验失败）、`order.verify.result`（验单结果）、`rtdn.voided_received`（收到作废通知）、`refund.processed`（退款回收已提交）、`refund.skipped`（跳过及原因）。单个业务事件未必包含路由、订单号或请求 ID：这些筛选条件只匹配有该字段的日志，可以先按订单号找到请求 ID，再用请求 ID 查看完整链路。
 
+## 日活统计
+
+`daily_user_activity` 按北京时间（`Asia/Shanghai`）记录非主播用户，每位用户每天最多一条。成功登录、通过会话鉴权并完成处理的 HTTP 请求，以及已认证用户建立 WebSocket 连接或发送应用层文本消息，都会记录活跃。连接保持空闲或仅有协议层心跳不算次日活跃。统计写入失败会记录日志，不回滚业务操作。
+
 ## 在虚拟环境运行项目
 
 1.进入你的项目文件夹
@@ -90,6 +94,13 @@ source .venv/bin/activate
 4.在虚拟环境里执行 Python /pip 命令
 ```bash
 python -m pip install -r requirements.txt
+```
+
+运行测试（包括使用本地 SQLite 的日活回归测试）：
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q tests
 ```
 
 5.退出虚拟环境

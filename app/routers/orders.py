@@ -44,7 +44,7 @@ def _is_legacy_google_purchase(order: Order, purchase: dict) -> bool:
 
 
 @router.get("/order/products")
-async def get_products(request: Request, db: AsyncSession = Depends(get_db_readonly)):
+async def get_products(request: Request, db: AsyncSession = Depends(get_db_readonly, scope="function")):
     """Get product list filtered by package_name from request header."""
     package_name = request.headers.get("package-name")
     if not package_name:
@@ -57,7 +57,7 @@ async def get_products(request: Request, db: AsyncSession = Depends(get_db_reado
 
 
 @router.post("/order/create")
-async def create_order(request: Request, data: CreateOrderRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def create_order(request: Request, data: CreateOrderRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db, scope="function")):
     """Create a new order record."""
     package_name = request.headers.get("package-name")
     if not package_name:
@@ -90,7 +90,7 @@ async def create_order(request: Request, data: CreateOrderRequest, user: User = 
 @router.get("/user/orders")
 async def get_user_orders(
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ):
@@ -120,7 +120,7 @@ async def verify_google_order(
     request: Request,
     data: VerifyGoogleRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Verify a Google Play in-app purchase and update order status.
 

@@ -32,7 +32,7 @@ CALL_TYPE_LIVE=3
 async def createCall(
     data: CreateCallRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db, scope="function")
 ):
     """Create a call."""
 
@@ -182,7 +182,7 @@ async def createCall(
 async def renewCall(
     data: RenewCallRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db, scope="function")
 ):
     result = await db.execute(select(Call).where(Call.id == data.call_id))
     call = result.scalar_one_or_none()
@@ -232,7 +232,7 @@ async def renewCall(
 async def startCall(
     data: RenewCallRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db, scope="function")
 ):
     result = await db.execute(select(Call).where(Call.id == data.call_id))
     call = result.scalar_one_or_none()
@@ -252,7 +252,7 @@ async def startCall(
 async def endCall(
     data: HangupCallRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db, scope="function")
 ):
     result = await db.execute(select(Call).where(Call.id == data.call_id))
     call = result.scalar_one_or_none()
@@ -292,7 +292,7 @@ async def get_call_records(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     user: User = Depends(current_user_readonly),
-    db: AsyncSession = Depends(get_db_readonly),
+    db: AsyncSession = Depends(get_db_readonly, scope="function"),
 ):
     """Get paginated call records for a user, sorted by created_time desc.
 

@@ -102,6 +102,9 @@ async def init_db_tables():
         await conn.run_sync(_upgrade_pay_orders)
 
 
+# Use function-scoped Depends for these HTTP sessions. Routes and their auth
+# dependencies must use the same scope to share a session and release its
+# connection before response background tasks run.
 async def get_db():
     """Dependency to get an async database session with transaction handling."""
     async with AsyncSessionLocal() as session:

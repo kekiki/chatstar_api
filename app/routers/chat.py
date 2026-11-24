@@ -15,6 +15,7 @@ from jose import JWTError, jwt
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.activity import track_user_activity
 from app.config import ALGORITHM, SECRET_KEY
 from app.logging_config import log_event
 from app.database import AsyncSessionLocal, get_db
@@ -73,7 +74,7 @@ async def send_message(
     data: SendMessageRequest,
     background_tasks: BackgroundTasks,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Send a one-to-one chat message (text/image/video/gift)."""
     if data.receiver_id == user.user_id:
@@ -373,7 +374,7 @@ async def solicit_chat_task(user_id: int):
 #     before_id: Optional[int] = None,
 #     limit: int = Query(50, le=200),
 #     user: User = Depends(current_user_readonly),
-#     db: AsyncSession = Depends(get_db_readonly),
+#     db: AsyncSession = Depends(get_db_readonly, scope="function"),
 # ):
 #     """Get paginated message history with a peer, newest first."""
 #     conds = [
@@ -479,6 +480,7 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(User).where(User.user_id == user_id))
             user = result.scalar_one_or_none()
+            activity_user = (user.user_id, user.is_anchor) if user is not None else None
             if user and not user.is_review and not user.is_reward_received:
                 # 修复竞态：多端同时连 WS 时"先查后改"会重复发奖，改为原子占坑
                 claim = await db.execute(
@@ -522,6 +524,10 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
         #             m.is_delivered = True
         #         await db.commit()
 
+        # Record only after the connection setup session has been released.
+        if activity_user is not None:
+            await track_user_activity(*activity_user)
+
         while True:
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_IDLE_TIMEOUT)
@@ -530,6 +536,8 @@ async def ws_connect(websocket: WebSocket, token: str = Query(...)):
                 # await websocket.close(code=1001)
                 break
             ack = await _handle_ws_action(user_id, raw)
+            if activity_user is not None:
+                await track_user_activity(*activity_user)
             await websocket.send_text(json.dumps(ack, ensure_ascii=False))
     except WebSocketDisconnect:
         pass

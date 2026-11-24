@@ -15,5 +15,6 @@ from .user_block import UserBlock
 from .user_report import UserReport
 from .transaction import Transaction
 from .call import Call
+from .activity import DailyUserActivity
 
-__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport", "Transaction", "Call"]
+__all__ = ["User", "Order", "Product", "AppList", "BlackWhiteUser", "BlackWhiteIp", "BlackWhiteDevice", "UserFollow", "UserLike", "Media", "AppReview", "Gift", "GiftRecord", "Task", "TaskRecord", "ChatMessage", "UserBlock", "UserReport", "Transaction", "Call", "DailyUserActivity"]
