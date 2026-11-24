@@ -1,6 +1,7 @@
 app/secrets/
 .git/
 .env
-.env.*.venv/
+.env.*
+.venv/
 __pycache__/
 **/__pycache__/
