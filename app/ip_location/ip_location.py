@@ -1,14 +1,16 @@
 import sys
 import os
+from ipaddress import IPv6Address, ip_address
 sys.stdout.reconfigure(encoding='utf-8')
 
 from qqwry import QQwry
 
 class IPLocationResult:
-    def __init__(self, ip, country, isp):
+    def __init__(self, ip, country, isp, *, lookup_supported=True):
         self.ip = ip
         self.country = country.split('–')[0] if country else ''
         self.isp = isp
+        self.lookup_supported = lookup_supported
 
 class IPLocation:
     def __init__(self):
@@ -18,8 +20,21 @@ class IPLocation:
         dat_path = os.path.join(os.path.dirname(__file__), "qqwry.dat")
         self.q.load_file(dat_path)
 
-    def get_ip_location(self, ip):
-        result = self.q.lookup(ip)
+    def get_ip_location(self, ip: str) -> IPLocationResult:
+        ip = ip.strip()
+        try:
+            address = ip_address(ip)
+        except ValueError:
+            return IPLocationResult('', '', '', lookup_supported=False)
+
+        lookup_address = address
+        if isinstance(address, IPv6Address):
+            ip = ip.partition('%')[0]
+            lookup_address = address.ipv4_mapped
+            if lookup_address is None:
+                return IPLocationResult(ip, '', '', lookup_supported=False)
+
+        result = self.q.lookup(str(lookup_address))
         if result is None:
             return IPLocationResult(ip, '', '')
         addr, isp = result

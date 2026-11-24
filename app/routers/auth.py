@@ -78,7 +78,7 @@ def _get_client_real_ip(request: Request) -> str:
     if xri:
         return xri.strip()
 
-    return request.client.host
+    return request.client.host if request.client else ""
 
 
 async def _check_review_user(db: AsyncSession, user_id: int, device_id: str, agent: str, ip_info: IPLocationResult) -> bool:
@@ -97,6 +97,10 @@ async def _check_review_user(db: AsyncSession, user_id: int, device_id: str, age
     black_white_device = result.scalar_one_or_none()
     if black_white_device and black_white_device.status == 0:
         return True
+
+    # With no supported IP lookup, the caller checks the app review configuration.
+    if not ip_info.lookup_supported:
+        return False
 
     is_review_user = False
     if len(ip_info.country) == 0 and len(ip_info.isp) == 0:
@@ -181,7 +185,7 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
         user_id=user_id,
         device_id=device_id,
         package_name=package_name,
-        ip=client_ip,
+        ip=ip_info.ip,
         country=ip_info.country,
         nickname=nickname,
         google_id=google_id,
