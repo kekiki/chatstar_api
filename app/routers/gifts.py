@@ -85,9 +85,12 @@ async def send_gift(
 
     gift_sender_id = user.user_id
     anchor_id = receiver.user_id
+    gift_id = gift.id
 
     await db.commit()
-    log_event(logger, logging.INFO, "gift.sent", user_id=gift_sender_id, amount=total_cost, gift_id=gift.id)
+    # AsyncSession expires ORM instances on commit by default. Keep the scalar
+    # ID before committing so logging does not trigger an implicit lazy refresh.
+    log_event(logger, logging.INFO, "gift.sent", user_id=gift_sender_id, amount=total_cost, gift_id=gift_id)
 
     background_tasks.add_task(background_chat_task, sender_id=anchor_id, receiver_id=gift_sender_id)
 
