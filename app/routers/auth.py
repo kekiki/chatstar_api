@@ -150,6 +150,10 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
     """Create a new user in the database."""
     device_id = request.headers.get("device-id")
     agent = request.headers.get("user-agent")
+    language_name = (request.headers.get("user-languageName") or "").strip()
+    language_code = (request.headers.get("user-languageCode") or "").strip()
+    if not language_name or not language_code:
+        language_name, language_code = "English", "en"
     user_id = random.randint(1000000, 9999999) + 80000000
     client_ip = _get_client_real_ip(request)
     ip_info = await asyncio.to_thread(ip_location.get_ip_location, client_ip)
@@ -193,6 +197,8 @@ async def _create_user(request: Request, db: AsyncSession, package_name: str, go
         email=email,
         avatar=avatar,
         agent=agent,
+        language_name=language_name,
+        language_code=language_code,
         is_review=is_review,
     )
     db.add(user)
