@@ -13,6 +13,7 @@ from typing import Literal, Optional
 
 from app.database import get_db, get_db_readonly
 from app.logging_config import log_event
+from app.online_status import get_online_status
 from app.models import Media, User, UserFollow, UserLike, GiftRecord, Gift, ChatMessage, Call, TaskRecord, UserReport
 from app.schemas import GoogleAttribution, GoogleTranslateRequest, DeleteAccountWithAccountPasswordRequest, SetPasswordRequest, UpdateFirebaseTokenRequest, UpdateUserInfoRequest
 from app.security import current_user, current_user_readonly, get_hash, verify_password
@@ -203,16 +204,13 @@ async def get_users(
                 live_list.append(m.to_dict())
             else:
                 media_list.append(m.to_dict())
-        is_live_status = len(live_list) > 0 and anchor.fans_count % 2 == 0 
+        is_live_status = bool(live_list) and (anchor.fans_count or 0) % 2 == 0
         anchor_dict["media_list"] = media_list
 
-        if user.is_review:
-            anchor_dict["online_status"] = 1
-        else:
-            if is_live_status:
-                anchor_dict["online_status"] = 2 
-            else:
-                anchor_dict["online_status"] = 1 if anchor.is_review or len(live_list) == 0 else 0
+        anchor_dict["online_status"] = get_online_status(
+            has_live_media=bool(live_list),
+            fans_count=anchor.fans_count,
+        )
 
         anchor_dict["is_followed"] = anchor.user_id in followed_ids
         anchor_dict["is_liked"] = anchor.user_id in liked_ids
@@ -311,14 +309,10 @@ async def get_user_detail(
     anchor_dict["is_followed"] = user.user_id in followed_ids
     anchor_dict["is_liked"] = user.user_id in liked_ids
 
-    if current_user.is_review:
-        anchor_dict["online_status"] = 1
-    else:
-        is_live = len(live_list) > 0 and user.fans_count % 2 == 0 
-        if is_live:
-            anchor_dict["online_status"] = 2
-        else:
-            anchor_dict["online_status"] = 1 if user.is_review or len(live_list) == 0 else 0
+    anchor_dict["online_status"] = get_online_status(
+        has_live_media=bool(live_list),
+        fans_count=user.fans_count,
+    )
 
     return {"code": 200, "data": anchor_dict}
 

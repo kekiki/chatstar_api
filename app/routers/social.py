@@ -10,12 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select, and_
 
 from app.database import get_db, get_db_readonly
-from app.models import User, UserFollow, UserLike, UserBlock, UserReport
+from app.models import Media, User, UserFollow, UserLike, UserBlock, UserReport
 from app.schemas import ReportUserRequest, TargetUserRequest
 from app.security import current_user, current_user_readonly
 from app.routers.tasks import add_task_progress
 from app.models.task import TYPE_FOLLOW_USERS
 from app.tools import send_user_be_followed_or_liked_notification
+from app.online_status import get_online_status
 
 router = APIRouter(prefix="/api", tags=["social"])
 
@@ -40,6 +41,26 @@ async def _get_target_user(db: AsyncSession, user: User, target_user_id: int) ->
 async def _find_user_by_id(db: AsyncSession, target_user_id: int) -> Optional[User]:
     result = await db.execute(select(User).where(User.user_id == target_user_id))
     return result.scalar_one_or_none()
+
+
+async def _get_online_statuses(db: AsyncSession, users: list[User]) -> dict[int, int]:
+    """Calculate the same media-based online status used by user/call routes."""
+    user_ids = [item.user_id for item in users]
+    if not user_ids:
+        return {}
+
+    result = await db.execute(select(Media).where(Media.user_id.in_(user_ids)))
+    live_media_user_ids = {
+        media.user_id
+        for media in result.scalars().all()
+        if media.is_video and media.video_type != 0
+    }
+
+    statuses = {}
+    for item in users:
+        has_live_media = item.user_id in live_media_user_ids
+        statuses[item.user_id] = get_online_status(has_live_media, item.fans_count)
+    return statuses
 
 
 # ===================== Follow =====================
@@ -286,14 +307,12 @@ async def get_my_follows(
     )
     rows = (await db.execute(query)).all()
 
+    online_statuses = await _get_online_statuses(db, [followed_user for _, followed_user in rows])
     items = []
     for follow_row, followed_user in rows:
         d = followed_user.to_dict()
         d["followed_at"] = follow_row.created_time.isoformat() if follow_row.created_time else None
-        if user.is_review:
-            d["online_status"] = 0
-        else:
-            d["online_status"] = 1 if followed_user.is_review else 0
+        d["online_status"] = online_statuses[followed_user.user_id]
         items.append(d)
 
     return {
@@ -340,15 +359,13 @@ async def get_my_fans(
     # )
     # liked_ids = set(liked_result.scalars().all())
 
+    online_statuses = await _get_online_statuses(db, [fan_user for _, fan_user in rows])
     items = []
     for follow_row, fan_user in rows:
         d = fan_user.to_dict()
         # d["fans_at"] = follow_row.created_time.isoformat() if follow_row.created_time else None
         # d["is_liked"] = fan_user.user_id in liked_ids
-        if user.is_review:
-            d["online_status"] = 0
-        else:
-            d["online_status"] = 1 if fan_user.is_review else 0
+        d["online_status"] = online_statuses[fan_user.user_id]
         items.append(d)
 
     return {
@@ -395,15 +412,13 @@ async def get_my_likers(
     # )
     # followed_ids = set(followed_result.scalars().all())
 
+    online_statuses = await _get_online_statuses(db, [liker_user for _, liker_user in rows])
     items = []
     for like_row, liker_user in rows:
         d = liker_user.to_dict()
         d["liked_at"] = int(like_row.created_time.timestamp()) if like_row.created_time else None
         # d["is_followed"] = liker_user.user_id in followed_ids
-        if user.is_review:
-            d["online_status"] = 0
-        else:
-            d["online_status"] = 1 if liker_user.is_review else 0
+        d["online_status"] = online_statuses[liker_user.user_id]
         items.append(d)
 
     return {

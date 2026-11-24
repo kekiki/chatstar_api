@@ -4,6 +4,7 @@ from sqlalchemy import select, func
 from typing import Optional
 
 from app.logging_config import log_event
+from app.online_status import get_online_status
 from app.schemas import CreateCallRequest, RenewCallRequest, HangupCallRequest
 from app.models import User, Call, Media
 from app.models.transaction import ASSET_DIAMOND, ASSET_MATCH_CARD, ASSET_CALL_CARD, TRANSACTION_MATCH, TRANSACTION_CALL, TRANSACTION_LIVE, TRANSACTION_REFUND
@@ -331,19 +332,29 @@ async def get_call_records(
         if call.is_ended and call.created_time and call.updated_time:
             duration_seconds = max(0, int((call.updated_time - call.created_time).total_seconds()))
 
+        if peer is None:
+            items.append({
+                "call_id": call.id,
+                "peer_id": call.anchor_id,
+                "call_type": call.call_type,
+                "is_ended": call.is_ended,
+                "is_paid": call.is_paid,
+                "duration_seconds": duration_seconds,
+                "created_time": int(call.created_time.timestamp()) if call.created_time else None,
+                "updated_time": int(call.updated_time.timestamp()) if call.updated_time else None,
+                "peer_info": None,
+            })
+            continue
+
         live_list = []
         for m in media_map.get(peer.user_id, []):
             if m.is_video and m.video_type != 0:
                 live_list.append(m.to_dict())
-        is_live_status = len(live_list) > 0 and peer.fans_count % 2 == 0 
 
-        if user.is_review:
-            online_status = 1
-        else:
-            if is_live_status:
-                online_status = 2 
-            else:
-                online_status = 1 if peer.is_review or len(live_list) == 0 else 0
+        online_status = get_online_status(
+            has_live_media=bool(live_list),
+            fans_count=peer.fans_count,
+        )
 
         items.append({
             "call_id": call.id,
